@@ -1,0 +1,6 @@
+backend/uploads/
+backend/data/
+data/
+node_modules/
+.env
+.next/
