@@ -62,11 +62,26 @@ export default function AdminDashboard() {
     setLoading(false);
   };
 
-  const copyToClipboard = (keyString: string) => {
+  const copyToClipboard = async (keyString: string) => {
     if (!keyString) return;
-    navigator.clipboard.writeText(keyString);
-    setCopiedKey(keyString);
-    setTimeout(() => setCopiedKey(null), 2000);
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(keyString);
+      } else {
+        const textArea = document.createElement("textarea");
+        textArea.value = keyString;
+        textArea.style.position = "absolute";
+        textArea.style.left = "-999999px";
+        document.body.prepend(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        textArea.remove();
+      }
+      setCopiedKey(keyString);
+      setTimeout(() => setCopiedKey(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy text: ', err);
+    }
   };
 
   return (
