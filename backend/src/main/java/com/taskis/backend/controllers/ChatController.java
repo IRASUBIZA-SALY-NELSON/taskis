@@ -219,15 +219,23 @@ public class ChatController {
         if (msg == null) return ResponseEntity.notFound().build();
 
         String emoji = body.get("emoji");
-String username = principal.getName();
- if (emoji == null || emoji.isBlank()) return ResponseEntity.badRequest().body("emoji required");
+        String username = principal.getName();
+        if (emoji == null || emoji.isBlank()) return ResponseEntity.badRequest().body("emoji required");
 
         try {
-            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-            java.util.Map<String, java.util.List<String>> reactions = mapper.readValue(
-                msg.getReactions() ==null || msg.getReactions().isBlank() ? "{}" : msg.getReactions(),
-                new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, java.util.List<String>>>() {}
-            );
+            // reactions stored as "emoji1:user1,user2;emoji2:user3"
+            String raw = msg.getReactions() == null || msg.getReactions().isBlank() ? "" : msg.getReactions();
+            java.util.Map<String, java.util.List<String>> reactions = new java.util.LinkedHashMap<>();
+            if (!raw.isBlank()) {
+                for (String part : raw.split(";")) {
+                    if (part.contains(":")) {
+                        String[] kv = part.split(":", 2);
+                        java.util.List<String> users = new java.util.ArrayList<>(java.util.Arrays.asList(kv[1].split(",")));
+                        users.removeIf(String::isBlank);
+                        reactions.put(kv[0], users);
+                    }
+                }
+            }
             reactions.computeIfAbsent(emoji, k -> new java.util.ArrayList<>());
             if (reactions.get(emoji).contains(username)) {
                 reactions.get(emoji).remove(username);
@@ -235,7 +243,12 @@ String username = principal.getName();
             } else {
                 reactions.get(emoji).add(username);
             }
-            msg.setReactions(mapper.writeValueAsString(reactions));
+            StringBuilder sb = new StringBuilder();
+            for (java.util.Map.Entry<String, java.util.List<String>> e : reactions.entrySet()) {
+                if (sb.length() > 0) sb.append(";");
+                sb.append(e.getKey()).append(":").append(String.join(",", e.getValue()));
+            }
+            msg.setReactions(sb.toString());
             messageRepository.save(msg);
             messagingTemplate.convertAndSend("/topic/" + msg.getChannel(), msg);
             return ResponseEntity.ok(msg);

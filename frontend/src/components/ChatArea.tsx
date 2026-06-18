@@ -118,7 +118,18 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
 
   const fmt = (d: string) => new Date(d).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const diffDay = (a: string, b: string) => new Date(a).toDateString() !== new Date(b).toDateString();
-  const parseRx = (r: string) => { try { return JSON.parse(r || '{}') as Record<string, string[]>; } catch { return {}; } };
+  const parseRx = (r: string): Record<string, string[]> => {
+    if (!r || !r.trim()) return {};
+    const result: Record<string, string[]> = {};
+    for (const part of r.split(';')) {
+      const idx = part.indexOf(':');
+      if (idx === -1) continue;
+      const emoji = part.slice(0, idx);
+      const users = part.slice(idx + 1).split(',').filter(Boolean);
+      if (emoji && users.length) result[emoji] = users;
+    }
+    return result;
+  };
   const readByOthers = (msg: any) => (msg.readBy || '').split(',').map((s: string) => s.trim()).some((u: string) => u && u !== user.username);
 
   const dateDivider = (ds: string) => {
