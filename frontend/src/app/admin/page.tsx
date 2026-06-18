@@ -64,23 +64,33 @@ export default function AdminDashboard() {
 
   const copyToClipboard = async (keyString: string) => {
     if (!keyString) return;
+    let success = false;
     try {
       if (navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(keyString);
+        success = true;
       } else {
         const textArea = document.createElement("textarea");
         textArea.value = keyString;
-        textArea.style.position = "absolute";
-        textArea.style.left = "-999999px";
-        document.body.prepend(textArea);
+        textArea.style.position = "fixed";
+        textArea.style.top = "0";
+        textArea.style.left = "0";
+        textArea.style.opacity = "0";
+        document.body.appendChild(textArea);
+        textArea.focus();
         textArea.select();
-        document.execCommand('copy');
-        textArea.remove();
+        success = document.execCommand('copy');
+        document.body.removeChild(textArea);
       }
+} catch (err) {
+      console.error('Failed to copy text: ', err);
+    }
+    if (success) {
       setCopiedKey(keyString);
       setTimeout(() => setCopiedKey(null), 2000);
-    } catch (err) {
-      console.error('Failed to copy text: ', err);
+    } else {
+      // Fallback: show full key in a prompt so user can manuallycopy
+      window.prompt('Copy the key below (Ctrl+C):', keyString);
     }
   };
 
