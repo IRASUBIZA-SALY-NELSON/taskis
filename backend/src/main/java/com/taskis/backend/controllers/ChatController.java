@@ -211,17 +211,23 @@ public class ChatController {
         return ResponseEntity.ok().build();
     }
 
+    @org.springframework.beans.factory.annotation.Value("${taskis.upload-dir:./uploads/}")
+    private String uploadDir;
+
     @PostMapping("/upload")
     public ResponseEntity<?> uploadFile(@RequestParam("file") MultipartFile file) {
         try {
-            String uploadDir = "/home/minister/Documents/taskis/backend/uploads/";
-            Files.createDirectories(Paths.get(uploadDir));
+            Path uploadPath = Paths.get(uploadDir).toAbsolutePath().normalize();
+            Files.createDirectories(uploadPath);
 
-            String fileName = UUID.randomUUID().toString() + "_" + file.getOriginalFilename();
-            Path filePath = Paths.get(uploadDir + fileName);
+            String original = file.getOriginalFilename() == null ? "file" : file.getOriginalFilename();
+            String safeName = original.replaceAll("[\\\\/]", "_");
+            String fileName = UUID.randomUUID().toString() + "_" + safeName;
+            Path filePath = uploadPath.resolve(fileName);
             Files.copy(file.getInputStream(), filePath);
 
-            return ResponseEntity.ok(Map.of("url", "/uploads/" + fileName, "type", file.getContentType()));
+            return ResponseEntity.ok(Map.of("url", "/uploads/" + fileName, "type",
+                    file.getContentType() == null ? "application/octet-stream" : file.getContentType()));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body("Could not upload file: " + e.getMessage());
         }

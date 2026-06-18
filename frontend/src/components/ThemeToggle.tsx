@@ -3,15 +3,11 @@
 import React, { useEffect, useState } from 'react';
 import { Moon, Sun } from 'lucide-react';
 
-export default function ThemeToggle() {
+export default function ThemeToggle({ size = 30 }: { size?: number }) {
   const [isLight, setIsLight] = useState(false);
 
   useEffect(() => {
-    // Check initial state
-    const currentTheme = localStorage.getItem('theme');
-    if (currentTheme === 'light') {
-      setIsLight(true);
-    }
+    setIsLight(localStorage.getItem('theme') === 'light');
   }, []);
 
   const toggleTheme = () => {
@@ -26,13 +22,17 @@ export default function ThemeToggle() {
     }
   };
 
+  const icon = size - 15;
+
   return (
     <button
       onClick={toggleTheme}
-      className="p-2 rounded-lg bg-surface-light border border-border hover:bg-bg-hover transition-colors text-text-muted hover:text-primary flex items-center justify-center"
-      title={isLight ? "Switch to Dark Mode" : "Switch to Light Mode"}
+      className="icon-btn"
+      style={{ width: size, height: size }}
+      title={isLight ? 'Switch to dark mode' : 'Switch to light mode'}
+      aria-label="Toggle theme"
     >
-      {isLight ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+      {isLight ? <Moon style={{ width: icon, height: icon }} /> : <Sun style={{ width: icon, height: icon }} />}
     </button>
   );
 }

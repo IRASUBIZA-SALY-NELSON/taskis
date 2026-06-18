@@ -1,7 +1,10 @@
+'use client';
+
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Send, Paperclip, File, Download, Image as ImageIcon, Menu } from 'lucide-react';
+import { Send, Paperclip, FileText, Download, Lock, Menu, X, AlertCircle, MessageSquare } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { initials, toneFor } from './Sidebar';
 
 interface ChatAreaProps {
   user: any;
@@ -11,6 +14,7 @@ interface ChatAreaProps {
 
 export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaProps) {
   const [messages, setMessages] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [inputValue, setInputValue] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -19,65 +23,50 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   const [showUnlockModal, setShowUnlockModal] = useState(false);
   const [passphrase, setPassphrase] = useState('');
   const [unlockError, setUnlockError] = useState('');
+  const [unlockLoading, setUnlockLoading] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const wsRef = useRef<any>(null);
+
+  const api = (p: string) => `http://${window.location.hostname}:8080${p}`;
+  const isBot = channel === 'taskis-bot';
+  const isDm = channel.startsWith('dm_');
+  const isChannel = !isBot && !isDm;
+
+  const headerTitle = isBot ? 'Taskis Bot' : isDm ? 'Direct message' : channel;
+  const headerSub = isBot ? 'Automated · read-only' : 'End-to-end encrypted';
 
   useEffect(() => {
-    // Load historical messages
-    fetch(`http://${window.location.hostname}:8080/api/chat/messages/${channel}`, {
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-    })
-    .then(r => {
-      if (!r.ok) throw new Error('Not OK');
-      return r.json();
-    })
-    .then(data => setMessages(data))
-    .catch(console.error);
-
-    // Setup WebSocket using Stomp via simple native WebSocket or SockJS
-    // For simplicity without external stomjs, we use a basic polling or raw websocket if Stomp is complex to bundle.
-    // Wait, the backend uses Stomp. We need @stomp/stompjs. Let's dynamically import it or use a simpler approach.
-
-    // Instead of raw STOMP, we will fetch periodically for this demo if STOMP isn't loaded,
-    // or better, we can just use setInterval to simulate real-time if we don't have stompjs installed.
-    // Let's implement a simple poll for robust local network since it's just 12 users.
-    const interval = setInterval(() => {
-      fetch(`http://${window.location.hostname}:8080/api/chat/messages/${channel}`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-      })
-      .then(r => {
-        if (r.status === 401 || r.status === 403) {
+    setLoading(true);
+    let first = true;
+    const load = () => {
+      fetch(api(`/api/chat/messages/${channel}`), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
+        .then((r) => {
+          if (r.status === 401 || r.status === 403) {
             localStorage.removeItem('token');
             localStorage.removeItem('user');
             window.location.href = '/';
             throw new Error('Unauthorized');
-        }
-        if (!r.ok) throw new Error('Not OK');
-        return r.json();
-      })
-      .then(data => {
-        if(data.length > messages.length) {
-            setMessages(data);
-            if (document.hidden) {
-                const unread = data.length - messages.length;
-                document.title = `(${unread}) TASKIS - New Message`;
+          }
+          if (!r.ok) throw new Error('Not OK');
+          return r.json();
+        })
+        .then((data) => {
+          if (first) { setMessages(data); setLoading(false); first = false; return; }
+          setMessages((prev) => {
+            if (data.length > prev.length && document.hidden) {
+              document.title = `(${data.length - prev.length}) Taskis`;
             }
-        }
-      })
-      .catch(console.error);
-    }, 1000);
-
-    const handleFocus = () => {
-        document.title = 'TASKIS';
+            return data.length !== prev.length ? data : prev;
+          });
+        })
+        .catch((e) => { setLoading(false); console.error(e); });
     };
+    load();
+    const interval = setInterval(load, 1000);
+    const handleFocus = () => { document.title = 'Taskis'; };
     window.addEventListener('focus', handleFocus);
-
-    return () => {
-        clearInterval(interval);
-        window.removeEventListener('focus', handleFocus);
-    };
-  }, [channel, messages.length]);
+    return () => { clearInterval(interval); window.removeEventListener('focus', handleFocus); };
+  }, [channel]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -86,19 +75,17 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputValue.trim() && !file) return;
-
     let attachmentUrl = null;
     let attachmentType = null;
-
     if (file) {
       setIsUploading(true);
       const formData = new FormData();
       formData.append('file', file);
       try {
-        const res = await fetch(`http://${window.location.hostname}:8080/api/chat/upload`, {
+        const res = await fetch(api('/api/chat/upload'), {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-          body: formData
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+          body: formData,
         });
         if (!res.ok) throw new Error('Upload failed');
         const data = await res.json();
@@ -110,277 +97,305 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
       setIsUploading(false);
       setFile(null);
     }
-
-    // Since we don't have stompJS ready in the generated code, we will just simulate send via REST endpoint.
-    // Wait, we didn't add a REST endpoint for sending! Let's modify the component to do it.
-    // Actually, sending via REST is easy if we add it to the backend. I'll just use a mock POST for now,
-    // wait I need to add a POST /api/chat/send to the backend!
-
-    // For now we'll just push locally and the poll will sync it later.
-    // Let's call the POST /api/chat/send.
     try {
-        await fetch(`http://${window.location.hostname}:8080/api/chat/send`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            },
-            body: JSON.stringify({
-                content: inputValue,
-                channel: channel,
-                attachmentUrl,
-                attachmentType
-            })
-        });
-        setInputValue('');
-        // force immediate poll
-    } catch(err) {
-        console.error(err);
+      await fetch(api('/api/chat/send'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
+        body: JSON.stringify({ content: inputValue, channel, attachmentUrl, attachmentType }),
+      });
+      setInputValue('');
+    } catch (err) {
+      console.error(err);
     }
-  };
-
-  const formatTime = (dateStr: string) => {
-    return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
-
-  const isDifferentDay = (dateStr1: string, dateStr2: string) => {
-    return new Date(dateStr1).toDateString() !== new Date(dateStr2).toDateString();
   };
 
   const handleUnlock = async (e: React.FormEvent) => {
     e.preventDefault();
+    setUnlockLoading(true);
     try {
-        const res = await fetch(`http://${window.location.hostname}:8080/api/chat/unlock-archive`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            },
-            body: JSON.stringify({ passphrase })
-        });
-        if (res.ok) {
-            setShowUnlockModal(false);
-            setPassphrase('');
-            setUnlockError('');
-            // refetch by just relying on the poll
-        } else {
-            const err = await res.text();
-            setUnlockError(err);
-        }
-    } catch(err) {
-        setUnlockError('Connection error');
+      const res = await fetch(api('/api/chat/unlock-archive'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
+        body: JSON.stringify({ passphrase }),
+      });
+      if (res.ok) {
+        setShowUnlockModal(false);
+        setPassphrase('');
+        setUnlockError('');
+      } else {
+        setUnlockError(await res.text());
+      }
+    } catch (err) {
+      setUnlockError('Connection error');
     }
+    setUnlockLoading(false);
   };
 
-  const renderDateDivider = (dateStr: string) => {
-      const d = new Date(dateStr);
-      const today = new Date();
-      const yesterday = new Date(today);
-      yesterday.setDate(yesterday.getDate() - 1);
+  const formatTime = (s: string) => new Date(s).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const sameDay = (a: string, b: string) => new Date(a).toDateString() === new Date(b).toDateString();
 
-      let label = d.toLocaleDateString();
-      if (d.toDateString() === today.toDateString()) label = "Today";
-      else if (d.toDateString() === yesterday.toDateString()) label = "Yesterday";
+  const dividerLabel = (s: string) => {
+    const d = new Date(s);
+    const today = new Date();
+    const yest = new Date(today);
+    yest.setDate(yest.getDate() - 1);
+    if (d.toDateString() === today.toDateString()) return 'Today';
+    if (d.toDateString() === yest.toDateString()) return 'Yesterday';
+    return d.toLocaleDateString(undefined, { month: 'long', day: 'numeric' });
+  };
 
+  const fileNameOf = (url: string) => url.split('/').pop()?.split('_').slice(1).join('_') || 'Document';
+
+  const Attachment = ({ msg, mine }: { msg: any; mine: boolean }) => {
+    if (!msg.attachmentUrl) return null;
+    const full = api(msg.attachmentUrl);
+    if (msg.attachmentType?.startsWith('image/')) {
       return (
-          <div className="flex items-center justify-center my-6 relative group">
-              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-border"></div></div>
-              <div className="relative px-4 py-1.5 rounded-full bg-surface-light border border-border text-xs text-text-muted font-bold tracking-widest uppercase hover:text-text cursor-pointer transition-colors z-10 flex items-center gap-2">
-                  {label}
-                  <span className="opacity-50 text-[10px]">▼</span>
-                  <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-56 bg-surface-light border border-border rounded-lg shadow-2xl opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-50 overflow-hidden flex flex-col pt-1 pb-1">
-                      <div className="px-3 py-1.5 text-[10px] text-text-muted uppercase font-bold tracking-wider">Jump to...</div>
-                      <button onClick={() => messagesEndRef.current?.scrollIntoView()} className="px-3 py-2 text-xs text-left hover:bg-bg-hover text-text transition-colors">Today</button>
-                      <button onClick={() => setShowUnlockModal(true)} className="px-3 py-2 text-xs text-left hover:bg-bg-hover text-text-muted transition-colors flex items-center justify-between">Last week <span className="text-[8px] border border-border px-1 rounded bg-black/40 text-primary">SECURE</span></button>
-                      <button onClick={() => setShowUnlockModal(true)} className="px-3 py-2 text-xs text-left hover:bg-bg-hover text-text-muted transition-colors flex items-center justify-between">Last month <span className="text-[8px] border border-border px-1 rounded bg-black/40 text-primary">SECURE</span></button>
-                      <button onClick={() => setShowUnlockModal(true)} className="px-3 py-2 text-xs text-left hover:bg-bg-hover text-text-muted transition-colors flex items-center justify-between">The very beginning <span className="text-[8px] border border-border px-1 rounded bg-black/40 text-primary">SECURE</span></button>
-                  </div>
-              </div>
-          </div>
+        <button
+          onClick={() => setSelectedImage(full)}
+          className="block w-[282px] max-w-full rounded-[14px] overflow-hidden border border-border cursor-zoom-in hover:border-border-strong transition-colors p-0 bg-transparent"
+        >
+          <img src={full} alt="attachment" className="w-full max-h-[260px] object-cover block" />
+        </button>
       );
+    }
+    return (
+      <div className="flex items-center gap-[11px] px-3 py-2.5 rounded-xl border border-border w-[264px] max-w-full" style={{ background: mine ? 'var(--bubble-own)' : 'var(--surface-2)' }}>
+        <span className="w-[34px] h-[34px] rounded-lg bg-surface-3 grid place-items-center flex-none text-t2">
+          <FileText className="w-4 h-4" />
+        </span>
+        <div className="flex-1 min-w-0">
+          <div className="text-[13.5px] font-medium text-t1 truncate">{fileNameOf(msg.attachmentUrl)}</div>
+          <div className="text-xs text-t3 uppercase">{msg.attachmentType?.split('/')[1] || 'file'}</div>
+        </div>
+        <a href={full} download target="_blank" rel="noreferrer" className="icon-btn w-[30px] h-[30px] border-0" aria-label="Download">
+          <Download className="w-[15px] h-[15px]" />
+        </a>
+      </div>
+    );
   };
 
   return (
-    <div className="flex flex-col h-full z-10">
-      <header className="glass p-4 flex items-center justify-between border-b border-border shadow-md">
-        <div className="flex items-center gap-3">
-          <button onClick={onToggleSidebar} className="p-2 hover:bg-bg-hover rounded-lg text-text-muted hover:text-text transition-colors lg:hidden">
-            <Menu className="w-5 h-5" />
-          </button>
-          <div>
-            <h2 className="text-lg font-bold flex items-center gap-2 text-text">
-              <span className="text-primary">#</span> {channel}
-            </h2>
-            <p className="text-xs text-text-muted">Encrypted P2P Comm Link • E2E Enabled</p>
+    <div className="flex flex-col h-full">
+      {/* header */}
+      <header className="flex items-center gap-[13px] px-[22px] h-[62px] flex-none border-b border-border">
+        <button onClick={onToggleSidebar} className="icon-btn w-8 h-8 lg:hidden" aria-label="Toggle sidebar">
+          <Menu className="w-[15px] h-[15px]" />
+        </button>
+        {isChannel && <span className="text-[22px] font-medium text-t3 leading-none">#</span>}
+        {isBot && <span className="w-[30px] h-[30px] rounded-lg bg-accent-soft text-accent-text text-[13px] font-bold grid place-items-center flex-none">TB</span>}
+        {isDm && <span className="w-[30px] h-[30px] rounded-full grid place-items-center flex-none text-xs font-semibold text-white" style={{ background: toneFor(channel) }}>{initials(headerTitle)}</span>}
+        <div className="flex-1 min-w-0">
+          <div className="text-[15.5px] font-semibold text-t1 leading-tight truncate">{headerTitle}</div>
+          <div className="flex items-center gap-1.5 text-xs text-t2 mt-px">
+            <Lock className="w-[11px] h-[11px]" />
+            {headerSub}
           </div>
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
-        {messages.map((msg, idx) => {
-          const isMe = msg.sender.username === user.username;
-          const showDateDivider = idx === 0 || isDifferentDay(msg.timestamp, messages[idx - 1].timestamp);
-
-          return (
-            <React.Fragment key={msg.id || idx}>
-              {showDateDivider && renderDateDivider(msg.timestamp)}
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
-              >
-              <div className="flex items-end gap-2 max-w-[80%]">
-                {!isMe && msg.sender.avatarUrl && <img src={msg.sender.avatarUrl.startsWith('http') ? msg.sender.avatarUrl : `http://${window.location.hostname}:8080${msg.sender.avatarUrl}`} alt="" className="w-8 h-8 rounded-full border border-border mb-1" />}
-                {!isMe && !msg.sender.avatarUrl && <div className="w-8 h-8 rounded-full border border-border mb-1 flex items-center justify-center bg-surface-light text-xs text-text-muted">{msg.sender.username.charAt(0).toUpperCase()}</div>}
-
-                <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-                  <div className="flex items-center gap-2 mb-1 px-1">
-                    <span className="text-xs font-medium text-text-muted">{msg.sender.username}</span>
-                    <span className="text-[10px] text-text-muted/50">{formatTime(msg.timestamp)}</span>
-                  </div>
-
-                  <div className={`p-3 rounded-2xl ${isMe ? 'bg-primary/20 text-text border border-primary/30 rounded-br-sm glow-border' : 'bg-surface-light text-text border border-border rounded-bl-sm'}`}>
-                    {msg.content && <p className="text-sm whitespace-pre-wrap">{msg.content}</p>}
-
-                    {msg.attachmentUrl && (
-                      <div className="mt-2">
-                        {msg.attachmentType?.startsWith('image/') ? (
-                          <motion.img
-                            layoutId={`img-${msg.id}`}
-                            onClick={() => setSelectedImage(`http://${window.location.hostname}:8080${msg.attachmentUrl}`)}
-                            src={`http://${window.location.hostname}:8080${msg.attachmentUrl}`}
-                            alt="attachment"
-                            className="max-w-xs max-h-64 object-cover rounded-lg border border-border cursor-zoom-in"
-                          />
-                        ) : (
-                          <div className="flex items-center gap-3 p-3 bg-surface-light border border-border rounded-xl max-w-sm mt-1">
-                            <div className="p-2 bg-primary/20 rounded-lg">
-                              <File className="w-6 h-6 text-primary" />
-                            </div>
-                            <div className="flex flex-col overflow-hidden">
-                              <span className="text-sm text-text truncate font-medium">
-                                {msg.attachmentUrl.split('/').pop()?.split('_').slice(1).join('_') || 'Document'}
-                              </span>
-                              <span className="text-xs text-text-muted uppercase">
-                                {msg.attachmentType?.split('/')[1] || 'FILE'}
-                              </span>
-                            </div>
-                            <a
-                              href={`http://${window.location.hostname}:8080${msg.attachmentUrl}`}
-                              download
-                              target="_blank"
-                              rel="noreferrer"
-                              className="ml-auto p-2 bg-primary/10 hover:bg-primary/30 rounded-lg transition-colors text-primary"
-                            >
-                              <Download className="w-4 h-4" />
-                            </a>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
+      {/* messages */}
+      <div className="scroll flex-1 overflow-y-auto px-[22px] pt-4 pb-2">
+        {!loading && messages.length > 0 && (
+          <button
+            onClick={() => { setUnlockError(''); setShowUnlockModal(true); }}
+            className="flex items-center justify-center gap-2 mx-auto mb-2 px-3.5 py-1.5 rounded-full bg-surface-2 border border-border text-[12px] text-t2 hover:text-t1 hover:border-border-strong transition-colors"
+          >
+            <Lock className="w-[12px] h-[12px]" />
+            Older history is sealed · <span className="text-accent-text font-medium">unlock archive</span>
+          </button>
+        )}
+        {loading ? (
+          <div className="flex flex-col gap-[22px] pt-2">
+            {[60, 80, 50, 70].map((w, i) => (
+              <div key={i} className="flex gap-[11px]">
+                <span className="w-7 h-7 rounded-full bg-surface-2 flex-none" />
+                <div className="flex flex-col gap-[7px]">
+                  <span className="w-[90px] h-[9px] rounded bg-surface-2" />
+                  <span className="h-[13px] rounded-md bg-surface-2" style={{ width: `${w}%`, minWidth: 120 }} />
                 </div>
               </div>
-            </motion.div>
-          </React.Fragment>
-          );
-        })}
+            ))}
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="h-full flex flex-col items-center justify-center text-center px-5 gap-3.5">
+            <div className="w-[54px] h-[54px] rounded-[14px] bg-surface-2 border border-border grid place-items-center text-t3">
+              <MessageSquare className="w-[22px] h-[22px]" />
+            </div>
+            <div>
+              <div className="text-base font-semibold text-t1">No messages yet</div>
+              <div className="text-[13.5px] text-t2 mt-1 max-w-[300px] leading-relaxed">
+                Start the conversation. Every message in {isChannel ? `#${channel}` : 'this thread'} is end-to-end encrypted.
+              </div>
+            </div>
+          </div>
+        ) : (
+          messages.map((msg, idx) => {
+            const isMe = msg.sender.username === user.username;
+            const showDivider = idx === 0 || !sameDay(msg.timestamp, messages[idx - 1].timestamp);
+            const src = msg.sender.avatarUrl
+              ? (msg.sender.avatarUrl.startsWith('http') ? msg.sender.avatarUrl : api(msg.sender.avatarUrl))
+              : null;
+            return (
+              <React.Fragment key={msg.id || idx}>
+                {showDivider && (
+                  <div className="flex items-center gap-3 my-[18px]">
+                    <div className="flex-1 h-px bg-border" />
+                    <span className="eyebrow" style={{ letterSpacing: '0.04em' }}>{dividerLabel(msg.timestamp)}</span>
+                    <div className="flex-1 h-px bg-border" />
+                  </div>
+                )}
+                {isMe ? (
+                  <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-row-reverse mt-3.5">
+                    <div className="min-w-0 max-w-[76%] flex flex-col items-end">
+                      <div className="flex items-baseline gap-2 mb-1">
+                        <span className="text-[11px] text-t3">{formatTime(msg.timestamp)}</span>
+                        <span className="text-[13px] font-semibold text-t1">You</span>
+                      </div>
+                      <div className="flex flex-col gap-1 items-end w-full">
+                        {msg.content && (
+                          <div className="px-[13px] py-[9px] text-[14.5px] leading-relaxed text-t1 border border-border whitespace-pre-wrap break-words" style={{ background: 'var(--bubble-own)', borderRadius: '15px 5px 15px 15px' }}>
+                            {msg.content}
+                          </div>
+                        )}
+                        <Attachment msg={msg} mine />
+                      </div>
+                    </div>
+                  </motion.div>
+                ) : (
+                  <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex gap-[11px] mt-3.5 items-start">
+                    <span className="w-7 h-7 rounded-full grid place-items-center flex-none text-[11px] font-semibold text-white mt-0.5" style={{ background: src ? 'transparent' : toneFor(msg.sender.username) }}>
+                      {src ? <img src={src} alt="" className="w-full h-full rounded-full object-cover" /> : initials(msg.sender.username)}
+                    </span>
+                    <div className="min-w-0 max-w-[76%]">
+                      <div className="flex items-baseline gap-2 mb-1">
+                        <span className="text-[13px] font-semibold text-t1">{msg.sender.username}</span>
+                        <span className="text-[11px] text-t3">{formatTime(msg.timestamp)}</span>
+                      </div>
+                      <div className="flex flex-col gap-1 items-start">
+                        {msg.content && (
+                          <div className="px-[13px] py-[9px] text-[14.5px] leading-relaxed text-t1 border border-border whitespace-pre-wrap break-words" style={{ background: 'var(--bubble-other)', borderRadius: '5px 15px 15px 15px' }}>
+                            {msg.content}
+                          </div>
+                        )}
+                        <Attachment msg={msg} mine={false} />
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </React.Fragment>
+            );
+          })
+        )}
         <div ref={messagesEndRef} />
       </div>
 
-      {channel === 'taskis-bot' ? (
-        <div className="p-4 glass border-t border-border text-center text-xs font-bold tracking-widest text-text-muted uppercase">
-          SYSTEM CHANNEL (READ-ONLY)
+      {/* composer */}
+      {isBot ? (
+        <div className="px-[22px] py-[17px] flex-none border-t border-border flex items-center justify-center gap-2 text-t3 text-[13px]">
+          <Lock className="w-[14px] h-[14px]" />
+          Taskis Bot is read-only — replies are automated.
         </div>
       ) : (
-        <div className="p-4 glass border-t border-border">
+        <form onSubmit={handleSendMessage} className="px-[22px] pt-[13px] pb-[18px] flex-none border-t border-border">
           {file && (
-            <div className="mb-2 p-2 bg-surface-light border border-primary/30 rounded-lg flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm text-primary">
-                <File className="w-4 h-4" /> {file.name}
+            <div className="mb-2 px-3 py-2 rounded-lg bg-surface-2 border border-accent-soft flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm text-accent-text">
+                <FileText className="w-4 h-4" /> {file.name}
               </div>
-              <button onClick={() => setFile(null)} className="text-red-400 text-xs hover:underline">Remove</button>
+              <button type="button" onClick={() => setFile(null)} className="text-danger text-xs hover:underline">Remove</button>
             </div>
           )}
-          <form onSubmit={handleSendMessage} className="relative flex items-center gap-2">
-            <label className="p-3 text-text-muted hover:text-primary transition-colors cursor-pointer bg-surface-light rounded-xl border border-border hover:border-primary/50">
-              <Paperclip className="w-5 h-5" />
+          <div className="flex items-center gap-1.5 rounded-[14px] border border-border-strong bg-surface-2 p-1.5">
+            <label className="icon-btn w-[34px] h-[34px] border-0 cursor-pointer">
+              <Paperclip className="w-[18px] h-[18px]" />
               <input type="file" className="hidden" onChange={(e) => setFile(e.target.files?.[0] || null)} />
             </label>
-
             <input
               type="text"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              placeholder="Transmit secure message..."
-              className="flex-1 bg-surface-light border border-border rounded-xl py-3 px-4 text-text placeholder-text-muted focus:outline-none glow-border transition-all"
+              placeholder={`Message ${isChannel ? '#' + channel : headerTitle}`}
+              className="flex-1 min-w-0 bg-transparent border-0 outline-none text-[14.5px] text-t1 px-1 py-2"
             />
-
             <button
               type="submit"
               disabled={(!inputValue.trim() && !file) || isUploading}
-              className="p-3 bg-primary/20 text-primary border border-primary/50 rounded-xl hover:bg-primary/30 hover:shadow-[0_0_15px_rgba(0,255,204,0.4)] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-label="Send"
+              className="btn-accent w-[34px] h-[34px] rounded-[10px] flex-none"
             >
-              {isUploading ? <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" /> : <Send className="w-5 h-5 ml-1" />}
+              {isUploading ? <span className="w-[15px] h-[15px] rounded-full border-2 border-white/35 border-t-white tk-spin" /> : <Send className="w-[17px] h-[17px]" />}
             </button>
-          </form>
-        </div>
+          </div>
+        </form>
       )}
 
+      {/* archive modal */}
       {showUnlockModal && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-surface border border-border rounded-2xl p-6 w-full max-w-md shadow-2xl relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-1 bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.8)]"></div>
-            <h3 className="text-red-500 font-bold uppercase tracking-widest text-lg mb-2 flex items-center gap-2">
-              RESTRICTED ARCHIVE
-            </h3>
-            <p className="text-text-muted text-sm mb-6">
-              Access to messages older than 48 hours requires clearance.
-              <br /><br />
-              <span className="text-red-400 font-bold uppercase">Warning:</span> 2 incorrect attempts will result in permanent lock-out.
+        <div onClick={() => setShowUnlockModal(false)} className="fixed inset-0 z-[400] flex items-center justify-center p-6 tk-fade" style={{ background: 'rgba(7,7,9,0.62)', backdropFilter: 'blur(2px)' }}>
+          <div onClick={(e) => e.stopPropagation()} className="card tk-pop w-[398px] max-w-full p-7" style={{ boxShadow: 'var(--shadow-lg), var(--edge-hi)' }}>
+            <div className="w-11 h-11 rounded-xl bg-surface-2 border border-border-strong grid place-items-center text-t2 mb-4">
+              <Lock className="w-5 h-5" />
+            </div>
+            <div className="eyebrow mb-[7px]" style={{ letterSpacing: '0.14em' }}>Restricted</div>
+            <h2 className="text-lg font-semibold text-t1 mb-1.5">Open restricted archive</h2>
+            <p className="text-[13.5px] leading-[1.55] text-t2 mb-5">
+              Messages older than 48 hours are sealed. Enter the archive passphrase to unlock the full history.
+              <br />
+              <span className="text-danger font-medium">2 incorrect attempts will lock this account.</span>
             </p>
-
             <form onSubmit={handleUnlock}>
               <input
                 type="password"
                 value={passphrase}
-                onChange={e => setPassphrase(e.target.value)}
-                placeholder="Enter Passphrase"
-                className="w-full bg-surface-light border border-border rounded-xl py-3 px-4 text-text placeholder-text-muted focus:outline-none focus:border-red-500 transition-colors mb-2"
+                onChange={(e) => setPassphrase(e.target.value)}
+                placeholder="Archive passphrase"
                 autoFocus
+                className={`tk-input ${unlockError ? 'is-error' : ''}`}
               />
-              {unlockError && <p className="text-red-500 text-xs font-bold mb-4">{unlockError}</p>}
-
-              <div className="flex gap-3 mt-6">
-                <button type="button" onClick={() => setShowUnlockModal(false)} className="flex-1 py-2 rounded-xl border border-border text-text hover:bg-bg-hover transition-colors">Abort</button>
-                <button type="submit" className="flex-1 py-2 rounded-xl bg-red-500/20 border border-red-500 text-red-500 hover:bg-red-500 hover:text-text transition-colors font-bold tracking-widest uppercase">Unlock</button>
+              {unlockError && (
+                <div className="flex items-center gap-1.5 mt-2.5 text-[12.5px] text-danger">
+                  <AlertCircle className="w-[13px] h-[13px] flex-none" />
+                  <span>{unlockError}</span>
+                </div>
+              )}
+              <div className="flex gap-2.5 mt-[22px]">
+                <button type="button" onClick={() => setShowUnlockModal(false)} className="btn-secondary flex-1 py-[11px] text-sm">Cancel</button>
+                <button type="submit" disabled={unlockLoading} className="btn-accent flex-1 py-[11px] text-sm">
+                  {unlockLoading && <span className="w-[14px] h-[14px] rounded-full border-2 border-white/35 border-t-white tk-spin" />}
+                  <span>Unlock</span>
+                </button>
               </div>
             </form>
           </div>
         </div>,
-        document.body
+        document.body,
       )}
 
+      {/* lightbox */}
       {typeof document !== 'undefined' && createPortal(
         <AnimatePresence>
           {selectedImage && (
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={() => setSelectedImage(null)}
-              className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 cursor-zoom-out"
+              className="fixed inset-0 z-[400] flex items-center justify-center p-12 cursor-zoom-out"
+              style={{ background: 'rgba(0,0,0,0.86)' }}
             >
+              <button onClick={() => setSelectedImage(null)} aria-label="Close" className="fixed top-[22px] right-[22px] w-[38px] h-[38px] grid place-items-center rounded-[10px] text-white cursor-pointer" style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.16)' }}>
+                <X className="w-[18px] h-[18px]" />
+              </button>
               <motion.img
-                layoutId={`img-full-${selectedImage}`}
-                src={selectedImage}
-                alt="Full screen"
-                className="max-w-full max-h-full object-contain rounded-xl shadow-2xl glow-border"
+                initial={{ scale: 0.97 }} animate={{ scale: 1 }}
+                src={selectedImage} alt="Full screen"
+                onClick={(e) => e.stopPropagation()}
+                className="max-w-full max-h-full object-contain rounded-xl"
+                style={{ border: '1px solid rgba(255,255,255,0.12)' }}
               />
             </motion.div>
           )}
         </AnimatePresence>,
-        document.body
+        document.body,
       )}
     </div>
   );

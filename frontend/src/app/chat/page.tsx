@@ -40,10 +40,10 @@ export default function ChatLayout() {
     return () => clearInterval(int);
   }, [user]);
 
-  if (!user) return <div className="min-h-screen bg-background flex items-center justify-center text-primary glow-text">Establishing Secure Connection...</div>;
+  if (!user) return <div className="min-h-screen flex items-center justify-center text-t2 text-sm">Establishing secure connection…</div>;
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
+    <div className="flex h-screen overflow-hidden">
       <Sidebar
         user={user}
         activeChannel={activeChannel}
@@ -52,10 +52,7 @@ export default function ChatLayout() {
         setIsOpen={setIsSidebarOpen}
       />
 
-      <main className="flex-1 flex flex-col relative h-full">
-        {/* Background glow for the chat area */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80%] h-[80%] rounded-full bg-primary/5 blur-[120px] pointer-events-none z-0" />
-
+      <main className="flex-1 flex flex-col relative h-full min-w-0 bg-bg">
         <ChatArea
           user={user}
           channel={activeChannel}
