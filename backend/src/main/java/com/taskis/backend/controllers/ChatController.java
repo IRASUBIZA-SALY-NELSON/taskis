@@ -171,9 +171,10 @@ public class ChatController {
         message.setTimestamp(new Date());
         if (messageDto.getReplyToId() != null) {
             messageRepository.findById(messageDto.getReplyToId()).ifPresent(message::setReplyTo);
+        }
 
+        Message savedMessage = messageRepository.save(message);
         messagingTemplate.convertAndSend("/topic/" + message.getChannel(), savedMessage);
-
         return ResponseEntity.ok(savedMessage);
     }
 
