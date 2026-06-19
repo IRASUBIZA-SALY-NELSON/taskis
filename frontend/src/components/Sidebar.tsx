@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Hash, Lock, Shield, LogOut, Newspaper } from 'lucide-react';
+import { Hash, Lock, Shield, LogOut, Newspaper, Search } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import ThemeToggle from './ThemeToggle';
 import SettingsMenu from './SettingsMenu';
@@ -121,8 +121,20 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
         <Lock className="w-[11px] h-[11px] text-t3" />
       </div>
 
+      {/* quick search */}
+      <div className="px-2 pt-2.5">
+        <button
+          onClick={() => window.dispatchEvent(new Event('open-command-palette'))}
+          className="w-full flex items-center gap-2 rounded-lg px-[9px] py-2 text-sm text-t3 bg-surface-2 border border-border hover:border-border-strong hover:text-t2 transition-colors"
+        >
+          <Search className="w-[14px] h-[14px]" />
+          <span className="flex-1 text-left">Search…</span>
+          <span className="text-[10px] border border-border rounded px-1.5 py-0.5">⌘K</span>
+        </button>
+      </div>
+
       {/* lists */}
-      <div className="scroll flex-1 overflow-y-auto px-2 py-2.5">
+      <div className="scroll flex-1 overflow-y-auto px-2 pt-1.5 pb-2.5">
         <button onClick={() => setActiveChannel('__posts__')} className={itemCls(activeChannel === '__posts__')}>
           <Newspaper className="w-[15px] h-[15px] flex-none" style={{ color: activeChannel === '__posts__' ? 'var(--accent-text)' : 'var(--t3)' }} />
           <span className="flex-1 text-sm font-medium">Feed</span>

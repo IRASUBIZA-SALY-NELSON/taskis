@@ -6,6 +6,7 @@ import Sidebar from '@/components/Sidebar';
 import ChatArea from '@/components/ChatArea';
 import PostsFeed from '@/components/PostsFeed';
 import NotificationManager from '@/components/NotificationManager';
+import CommandPalette from '@/components/CommandPalette';
 
 export default function AppShell({ initialChannel = 'general' }: { initialChannel?: string }) {
   const router = useRouter();
@@ -39,6 +40,7 @@ export default function AppShell({ initialChannel = 'general' }: { initialChanne
   return (
     <div className="flex h-screen overflow-hidden">
       <NotificationManager user={user} />
+      <CommandPalette user={user} onNavigate={setActiveChannel} />
       <Sidebar
         user={user}
         activeChannel={activeChannel}
