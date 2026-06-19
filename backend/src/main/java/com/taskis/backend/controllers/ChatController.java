@@ -93,6 +93,19 @@ public class ChatController {
         messagingTemplate.convertAndSend("/topic/" + message.getChannel(), savedMessage);
     }
 
+    // Typing indicator relay (transient — not persisted)
+    @MessageMapping("/chat.typing")
+    public void typing(@Payload Map<String, String> payload, Principal principal) {
+        if (principal == null)
+            return;
+        String channel = payload.get("channel");
+        User sender = userRepository.findByUsername(principal.getName()).orElse(null);
+        if (sender == null || !canAccessChannel(sender, channel))
+            return;
+        messagingTemplate.convertAndSend("/topic/" + channel + ".typing",
+                (Object) Map.of("username", sender.getUsername(), "channel", channel));
+    }
+
     // REST APIs
     @GetMapping("/messages/{channel}")
     public ResponseEntity<?> getMessages(@PathVariable String channel, Principal principal) {
@@ -350,7 +363,9 @@ public class ChatController {
         String readBy = msg.getReadBy() == null ? "" : msg.getReadBy();
         if (!java.util.Arrays.asList(readBy.split(",")).contains(username)) {
             msg.setReadBy(readBy.isBlank() ? username : readBy + "," + username);
-            messageRepository.save(msg);
+            Message saved = messageRepository.save(msg);
+            // Broadcast so senders see read receipts update live.
+            messagingTemplate.convertAndSend("/topic/" + saved.getChannel(), saved);
         }
         return ResponseEntity.ok().build();
     }

@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { Send, Paperclip, FileText, Download, Lock, Menu, X, AlertCircle, MessageSquare, MoreVertical, Reply, Pencil, Trash2, SmilePlus, CheckCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { initials, toneFor } from './Sidebar';
+import { subscribe, publish } from '@/lib/ws';
 
 interface ChatAreaProps { user: any; channel: string; onToggleSidebar: () => void; }
 
@@ -29,12 +30,16 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   const [unlockErr, setUnlockErr] = useState('');
   const [unlockLoading, setUnlockLoading] = useState(false);
   const [newCount, setNewCount] = useState(0);
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const editRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const nearBottomRef = useRef(true);
   const prevLenRef = useRef(0);
+  const unreadRef = useRef(0);
+  const lastTyping = useRef(0);
+  const typingTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const isBot = channel === 'taskis-bot';
   const isDm = channel.startsWith('dm_');
@@ -50,8 +55,10 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     setLoading(true);
     setMessages([]);
     setNewCount(0);
+    setTypingUsers([]);
     nearBottomRef.current = true;
     prevLenRef.current = 0;
+    unreadRef.current = 0;
     fetch(api(`/api/chat/messages/${channel}`), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
       .then((r) => { if (r.status === 401 || r.status === 403) { localStorage.clear(); window.location.href = '/'; } return r.json(); })
       .then((d) => { setMessages(d); setLoading(false); })
@@ -59,21 +66,32 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   }, [channel]);
 
   useEffect(() => {
-    const iv = setInterval(() => {
-      fetch(api(`/api/chat/messages/${channel}`), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
-        .then((r) => { if (r.status === 401) { localStorage.clear(); window.location.href = '/'; } return r.json(); })
-        .then((data: any[]) => setMessages((prev) => {
-          if (data.length !== prev.length || JSON.stringify(data.map((m) => m.reactions + m.readBy)) !== JSON.stringify(prev.map((m) => m.reactions + m.readBy))) {
-            if (data.length > prev.length && document.hidden) document.title = `(${data.length - prev.length}) Taskis`;
-            return data;
-          }
-          return prev;
-        })).catch(() => {});
-    }, 1500);
-    const onFocus = () => { document.title = 'Taskis'; };
+    const upsert = (incoming: any) => {
+      if (!incoming || incoming.id == null) return;
+      setMessages((prev) => {
+        const i = prev.findIndex((m) => m.id === incoming.id);
+        if (i === -1) {
+          if (document.hidden) { unreadRef.current += 1; document.title = `(${unreadRef.current}) Taskis`; }
+          return [...prev, incoming];
+        }
+        const copy = prev.slice();
+        copy[i] = incoming;
+        return copy;
+      });
+    };
+    const offMsg = subscribe(`/topic/${channel}`, upsert);
+    const offTyping = subscribe(`/topic/${channel}.typing`, (e: any) => {
+      if (!e || !e.username || e.username === user.username) return;
+      setTypingUsers((prev) => (prev.includes(e.username) ? prev : [...prev, e.username]));
+      clearTimeout(typingTimers.current[e.username]);
+      typingTimers.current[e.username] = setTimeout(() => {
+        setTypingUsers((prev) => prev.filter((u) => u !== e.username));
+      }, 3500);
+    });
+    const onFocus = () => { unreadRef.current = 0; document.title = 'Taskis'; };
     window.addEventListener('focus', onFocus);
-    return () => { clearInterval(iv); window.removeEventListener('focus', onFocus); };
-  }, [channel]);
+    return () => { offMsg(); offTyping(); window.removeEventListener('focus', onFocus); };
+  }, [channel, user.username]);
 
   useEffect(() => {
     messages.forEach((msg) => {
@@ -219,6 +237,17 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   const onComposerKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(e as any); }
   };
+
+  const notifyTyping = () => {
+    const now = Date.now();
+    if (now - lastTyping.current > 1800) { lastTyping.current = now; publish('/app/chat.typing', { channel }); }
+  };
+
+  const typingText = typingUsers.length === 1
+    ? `${typingUsers[0]} is typing…`
+    : typingUsers.length === 2
+      ? `${typingUsers[0]} and ${typingUsers[1]} are typing…`
+      : 'Several people are typing…';
 
   const Attachment = ({ msg, mine }: { msg: any; mine: boolean }) => {
     if (!msg.attachmentUrl) return null;
@@ -415,6 +444,18 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
         <div ref={bottomRef} />
       </div>
 
+      {/* typing indicator */}
+      {!isBot && typingUsers.length > 0 && (
+        <div className="px-[22px] h-5 flex items-center gap-2 text-[12px] text-t3">
+          <span className="flex items-center gap-0.5">
+            <span className="w-1 h-1 rounded-full bg-t3" style={{ animation: 'tk-dot 1.2s infinite' }} />
+            <span className="w-1 h-1 rounded-full bg-t3" style={{ animation: 'tk-dot 1.2s infinite 0.2s' }} />
+            <span className="w-1 h-1 rounded-full bg-t3" style={{ animation: 'tk-dot 1.2s infinite 0.4s' }} />
+          </span>
+          {typingText}
+        </div>
+      )}
+
       {/* jump to latest */}
       {newCount > 0 && (
         <div className="px-[22px] flex justify-center pointer-events-none">
@@ -462,7 +503,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                   <Paperclip className="w-[18px] h-[18px]" />
                   <input type="file" className="hidden" onChange={(e) => setFile(e.target.files?.[0] || null)} />
                 </label>
-                <textarea ref={taRef} rows={1} value={input} onChange={(e) => { setInput(e.target.value); autoGrow(); }} onKeyDown={onComposerKey} placeholder={`Message ${isChannel ? '#' + channel : headerTitle}`} className="scroll flex-1 min-w-0 bg-transparent border-0 outline-none resize-none text-[14.5px] leading-relaxed text-t1 px-1 py-2 max-h-[140px]" />
+                <textarea ref={taRef} rows={1} value={input} onChange={(e) => { setInput(e.target.value); autoGrow(); notifyTyping(); }} onKeyDown={onComposerKey} placeholder={`Message ${isChannel ? '#' + channel : headerTitle}`} className="scroll flex-1 min-w-0 bg-transparent border-0 outline-none resize-none text-[14.5px] leading-relaxed text-t1 px-1 py-2 max-h-[140px]" />
                 <button type="submit" disabled={(!input.trim() && !file) || uploading} aria-label="Send" className="btn-accent w-[34px] h-[34px] rounded-[10px] flex-none">
                   {uploading ? <span className="w-[15px] h-[15px] rounded-full border-2 border-white/35 border-t-white tk-spin" /> : <Send className="w-[17px] h-[17px]" />}
                 </button>

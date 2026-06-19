@@ -4,6 +4,7 @@ import React from 'react';
 import { Hash, Lock, Shield, LogOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import ThemeToggle from './ThemeToggle';
+import { disconnectWs } from '@/lib/ws';
 
 interface SidebarProps {
   user: any;
@@ -107,6 +108,7 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
   };
 
   const handleLogout = () => {
+    disconnectWs();
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     router.push('/');
