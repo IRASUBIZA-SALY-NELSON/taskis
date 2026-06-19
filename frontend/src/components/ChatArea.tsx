@@ -47,6 +47,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   const [recording, setRecording] = useState(false);
   const [recSeconds, setRecSeconds] = useState(0);
   const [showComposerPicker, setShowComposerPicker] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const mediaRecRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const recTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -463,7 +464,32 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
       if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); insertMention(mentionMatches[mentionSel].username); return; }
       if (e.key === 'Escape') { setMentionQuery(null); return; }
     }
+    if (e.key === 'Escape' && replyTo) { setReplyTo(null); return; }
+    if (e.key === 'ArrowUp' && !input.trim()) {
+      const mine = [...messages].reverse().find((m) => m.sender?.username === user.username && !m.deleted && typeof m.id === 'number');
+      if (mine) { e.preventDefault(); startEdit(mine); return; }
+    }
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(e as any); }
+  };
+
+  const onPaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const it of Array.from(items)) {
+      if (it.type.startsWith('image/')) {
+        const f = it.getAsFile();
+        if (f) { pickFile(f); e.preventDefault(); }
+        return;
+      }
+    }
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    if (isBot) return;
+    const f = e.dataTransfer.files?.[0];
+    if (f) pickFile(f);
   };
 
   const notifyTyping = () => {
@@ -550,7 +576,20 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   const actionBtnCls = 'w-[26px] h-[26px] grid place-items-center rounded-lg bg-surface-2 border border-border text-t2 hover:text-t1 hover:border-border-strong transition-colors cursor-pointer';
 
   return (
-    <div className="flex flex-col h-full">
+    <div
+      className="flex flex-col h-full relative"
+      onDragOver={(e) => { if (!isBot) { e.preventDefault(); setDragOver(true); } }}
+      onDragLeave={(e) => { if (e.currentTarget === e.target) setDragOver(false); }}
+      onDrop={onDrop}
+    >
+      {dragOver && !isBot && (
+        <div className="absolute inset-3 z-[60] rounded-2xl border-2 border-dashed grid place-items-center pointer-events-none" style={{ borderColor: 'var(--accent-line)', background: 'color-mix(in srgb, var(--accent) 8%, transparent)' }}>
+          <div className="text-center">
+            <div className="text-[15px] font-semibold text-accent-text">Drop to attach</div>
+            <div className="text-[12.5px] text-t2 mt-0.5">Release to add the file to your message</div>
+          </div>
+        </div>
+      )}
       {/* header */}
       <header className="flex items-center gap-[13px] px-[22px] h-[62px] flex-none border-b border-border">
         <button onClick={onToggleSidebar} className="icon-btn w-8 h-8 lg:hidden" aria-label="Toggle sidebar"><Menu className="w-[15px] h-[15px]" /></button>
@@ -906,7 +945,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                     <EmojiGifPicker onEmoji={insertEmoji} onGif={sendGif} onClose={() => setShowComposerPicker(false)} />
                   )}
                 </div>
-                <textarea ref={taRef} rows={1} value={input} onChange={(e) => { setInput(e.target.value); autoGrow(); notifyTyping(); detectMention(e.target.value, e.target.selectionStart ?? e.target.value.length); }} onKeyDown={onComposerKey} placeholder={`Message ${isChannel ? '#' + channel : headerTitle}`} className="scroll flex-1 min-w-0 bg-transparent border-0 outline-none resize-none text-[14.5px] leading-relaxed text-t1 px-1 py-2 max-h-[140px]" />
+                <textarea ref={taRef} rows={1} value={input} onPaste={onPaste} onChange={(e) => { setInput(e.target.value); autoGrow(); notifyTyping(); detectMention(e.target.value, e.target.selectionStart ?? e.target.value.length); }} onKeyDown={onComposerKey} placeholder={`Message ${isChannel ? '#' + channel : headerTitle}`} className="scroll flex-1 min-w-0 bg-transparent border-0 outline-none resize-none text-[14.5px] leading-relaxed text-t1 px-1 py-2 max-h-[140px]" />
                 <button type="submit" disabled={(!input.trim() && !file) || uploading} aria-label="Send" className="btn-accent w-[34px] h-[34px] rounded-[10px] flex-none">
                   {uploading ? <span className="w-[15px] h-[15px] rounded-full border-2 border-white/35 border-t-white tk-spin" /> : <Send className="w-[17px] h-[17px]" />}
                 </button>
