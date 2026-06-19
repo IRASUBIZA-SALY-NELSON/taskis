@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Send, Paperclip, FileText, Download, Lock, Menu, X, AlertCircle, MessageSquare, MoreVertical, Reply, Pencil, Trash2, SmilePlus, CheckCheck, Search, Pin, Bookmark, BookmarkCheck } from 'lucide-react';
+import { Send, Paperclip, FileText, Download, Lock, Menu, X, AlertCircle, MessageSquare, MoreVertical, Reply, Pencil, Trash2, SmilePlus, CheckCheck, Search, Pin, Bookmark, BookmarkCheck, Mic, Square } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { initials, toneFor } from './Sidebar';
 import { subscribe, publish } from '@/lib/ws';
@@ -42,6 +42,12 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   const [pinnedOpen, setPinnedOpen] = useState(false);
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
   const [highlightId, setHighlightId] = useState<number | null>(null);
+  const [recording, setRecording] = useState(false);
+  const [recSeconds, setRecSeconds] = useState(0);
+  const mediaRecRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const recTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recStreamRef = useRef<MediaStream | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const editRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -260,7 +266,48 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   const pickFile = (f: File | null) => {
     if (filePreview) URL.revokeObjectURL(filePreview);
     setFile(f);
-    setFilePreview(f && f.type.startsWith('image/') ? URL.createObjectURL(f) : null);
+    setFilePreview(f && (f.type.startsWith('image/') || f.type.startsWith('audio/')) ? URL.createObjectURL(f) : null);
+  };
+
+  const fmtDur = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+
+  const startRec = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recStreamRef.current = stream;
+      const mr = new MediaRecorder(stream);
+      chunksRef.current = [];
+      mr.ondataavailable = (e) => { if (e.data.size) chunksRef.current.push(e.data); };
+      mr.onstop = () => {
+        const type = mr.mimeType || 'audio/webm';
+        const ext = type.includes('mp4') ? 'm4a' : type.includes('ogg') ? 'ogg' : 'webm';
+        const blob = new Blob(chunksRef.current, { type });
+        pickFile(new File([blob], `voice-note.${ext}`, { type }));
+        stream.getTracks().forEach((t) => t.stop());
+      };
+      mediaRecRef.current = mr;
+      mr.start();
+      setRecording(true);
+      setRecSeconds(0);
+      recTimerRef.current = setInterval(() => setRecSeconds((s) => s + 1), 1000);
+    } catch {
+      alert('Microphone access is required to record a voice note.');
+    }
+  };
+
+  const stopRec = () => {
+    if (recTimerRef.current) clearInterval(recTimerRef.current);
+    setRecording(false);
+    mediaRecRef.current?.stop();
+  };
+
+  const cancelRec = () => {
+    if (recTimerRef.current) clearInterval(recTimerRef.current);
+    setRecording(false);
+    const mr = mediaRecRef.current;
+    if (mr) { mr.onstop = null; mr.stop(); }
+    recStreamRef.current?.getTracks().forEach((t) => t.stop());
+    chunksRef.current = [];
   };
 
   const clearFile = () => {
@@ -469,6 +516,14 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
         <button onClick={() => setBigImage(full)} className="block w-[282px] max-w-full rounded-[14px] overflow-hidden border border-border cursor-zoom-in hover:border-border-strong transition-colors p-0 bg-transparent mt-1.5">
           <img src={full} alt="attachment" className="w-full max-h-[260px] object-cover block" />
         </button>
+      );
+    }
+    if (msg.attachmentType?.startsWith('audio/')) {
+      return (
+        <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-border w-[282px] max-w-full mt-1.5" style={{ background: mine ? 'var(--bubble-own)' : 'var(--surface-2)' }}>
+          <span className="w-[30px] h-[30px] rounded-full bg-accent-soft text-accent-text grid place-items-center flex-none"><Mic className="w-[15px] h-[15px]" /></span>
+          <audio controls src={full} className="flex-1 min-w-0 h-9" style={{ maxWidth: 210 }} />
+        </div>
       );
     }
     return (
@@ -768,18 +823,34 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
               <button type="submit" className="btn-accent px-4 py-2.5 text-sm">Save</button>
               <button type="button" onClick={() => setEditMsg(null)} className="btn-secondary px-4 py-2.5 text-sm">Cancel</button>
             </form>
+          ) : recording ? (
+            <div className="flex items-center gap-3 rounded-[14px] border border-border-strong bg-surface-2 p-2 px-3">
+              <span className="w-2.5 h-2.5 rounded-full bg-danger flex-none" style={{ animation: 'tk-dot 1.2s infinite' }} />
+              <span className="text-[13px] font-medium text-t1 tabular-nums">{fmtDur(recSeconds)}</span>
+              <span className="text-[12px] text-t3 flex-1">Recording voice note…</span>
+              <button type="button" onClick={cancelRec} className="icon-btn w-8 h-8" title="Cancel"><Trash2 className="w-[15px] h-[15px]" /></button>
+              <button type="button" onClick={stopRec} className="btn-accent w-8 h-8 rounded-[10px]" title="Stop recording"><Square className="w-[14px] h-[14px]" /></button>
+            </div>
           ) : (
             <>
               {file && (
                 <div className="relative inline-flex items-center gap-3 p-2 pr-2.5 rounded-xl bg-surface-2 border border-border max-w-full overflow-hidden">
-                  {filePreview ? (
+                  {file.type.startsWith('image/') && filePreview ? (
                     <img src={filePreview} alt="" className="w-12 h-12 rounded-lg object-cover flex-none" />
+                  ) : file.type.startsWith('audio/') && filePreview ? (
+                    <span className="w-12 h-12 rounded-lg bg-accent-soft text-accent-text grid place-items-center flex-none"><Mic className="w-5 h-5" /></span>
                   ) : (
                     <span className="w-12 h-12 rounded-lg bg-surface-3 grid place-items-center text-t2 flex-none"><FileText className="w-5 h-5" /></span>
                   )}
                   <div className="min-w-0">
-                    <div className="text-[13px] font-medium text-t1 truncate max-w-[220px]">{file.name}</div>
-                    <div className="text-[11.5px] text-t3">{formatBytes(file.size)}</div>
+                    {file.type.startsWith('audio/') && filePreview ? (
+                      <audio controls src={filePreview} className="h-8" style={{ maxWidth: 200 }} />
+                    ) : (
+                      <>
+                        <div className="text-[13px] font-medium text-t1 truncate max-w-[220px]">{file.name}</div>
+                        <div className="text-[11.5px] text-t3">{formatBytes(file.size)}</div>
+                      </>
+                    )}
                   </div>
                   {!uploading && (
                     <button type="button" onClick={clearFile} aria-label="Remove attachment" className="icon-btn w-6 h-6 border-0 ml-1"><X className="w-3.5 h-3.5" /></button>
@@ -815,6 +886,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                   <Paperclip className="w-[18px] h-[18px]" />
                   <input type="file" className="hidden" onChange={(e) => pickFile(e.target.files?.[0] || null)} />
                 </label>
+                <button type="button" onClick={startRec} className="icon-btn w-[34px] h-[34px] border-0" title="Record voice note"><Mic className="w-[18px] h-[18px]" /></button>
                 <textarea ref={taRef} rows={1} value={input} onChange={(e) => { setInput(e.target.value); autoGrow(); notifyTyping(); detectMention(e.target.value, e.target.selectionStart ?? e.target.value.length); }} onKeyDown={onComposerKey} placeholder={`Message ${isChannel ? '#' + channel : headerTitle}`} className="scroll flex-1 min-w-0 bg-transparent border-0 outline-none resize-none text-[14.5px] leading-relaxed text-t1 px-1 py-2 max-h-[140px]" />
                 <button type="submit" disabled={(!input.trim() && !file) || uploading} aria-label="Send" className="btn-accent w-[34px] h-[34px] rounded-[10px] flex-none">
                   {uploading ? <span className="w-[15px] h-[15px] rounded-full border-2 border-white/35 border-t-white tk-spin" /> : <Send className="w-[17px] h-[17px]" />}
