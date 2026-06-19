@@ -38,6 +38,8 @@ export default function RootLayout({
                 } else {
                   document.documentElement.classList.remove('light');
                 }
+                var fs = localStorage.fontStack;
+                if (fs) document.documentElement.style.setProperty('--font-user', fs);
               } catch (_) {}
             `,
           }}

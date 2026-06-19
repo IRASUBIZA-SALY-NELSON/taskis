@@ -42,11 +42,38 @@ public class ChatController {
     @Autowired
     private UserRepository userRepository;
 
+    /**
+     * Authorization for a channel. Named channels and the bot channel are visible
+     * to every authenticated operative; a DM channel ("dm_<id1>_<id2>") is only
+     * accessible to the two participants. A null channel defaults to "general".
+     */
+    private boolean canAccessChannel(User user, String channel) {
+        if (user == null)
+            return false;
+        if (channel == null)
+            return true; // defaults to the shared "general" channel
+        if (channel.startsWith("dm_")) {
+            String[] parts = channel.split("_");
+            if (parts.length != 3 || user.getId() == null)
+                return false;
+            try {
+                return user.getId().equals(Long.parseLong(parts[1]))
+                        || user.getId().equals(Long.parseLong(parts[2]));
+            } catch (NumberFormatException e) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     // WebSocket Message Handling
     @MessageMapping("/chat.send")
     public void sendMessage(@Payload MessageDto messageDto, Principal principal) {
         User sender = userRepository.findByUsername(principal.getName()).orElse(null);
         if (sender == null)
+            return;
+
+        if (!canAccessChannel(sender, messageDto.getChannel()))
             return;
 
         if ("taskis-bot".equals(messageDto.getChannel()) && !"Taskis Bot".equals(sender.getUsername())) {
@@ -66,6 +93,19 @@ public class ChatController {
         messagingTemplate.convertAndSend("/topic/" + message.getChannel(), savedMessage);
     }
 
+    // Typing indicator relay (transient — not persisted)
+    @MessageMapping("/chat.typing")
+    public void typing(@Payload Map<String, String> payload, Principal principal) {
+        if (principal == null)
+            return;
+        String channel = payload.get("channel");
+        User sender = userRepository.findByUsername(principal.getName()).orElse(null);
+        if (sender == null || !canAccessChannel(sender, channel))
+            return;
+        messagingTemplate.convertAndSend("/topic/" + channel + ".typing",
+                (Object) Map.of("username", sender.getUsername(), "channel", channel));
+    }
+
     // REST APIs
     @GetMapping("/messages/{channel}")
     public ResponseEntity<?> getMessages(@PathVariable String channel, Principal principal) {
@@ -74,6 +114,9 @@ public class ChatController {
         User user = userRepository.findByUsername(principal.getName()).orElse(null);
         if (user == null)
             return ResponseEntity.status(401).body("User not found");
+
+        if (!canAccessChannel(user, channel))
+            return ResponseEntity.status(403).body("Forbidden");
 
         List<Message> allMessages = messageRepository.findByChannelOrderByTimestampAsc(channel);
 
@@ -139,6 +182,27 @@ public class ChatController {
         return ResponseEntity.badRequest().body("avatarUrl required");
     }
 
+    @PutMapping("/profile")
+    public ResponseEntity<?> updateProfile(
+            @org.springframework.web.bind.annotation.RequestBody Map<String, String> body, Principal principal) {
+        if (principal == null)
+            return ResponseEntity.status(401).body("Unauthorized");
+        User user = userRepository.findByUsername(principal.getName()).orElse(null);
+        if (user == null)
+            return ResponseEntity.status(401).body("User not found");
+
+        if (body.containsKey("displayName")) {
+            String dn = body.get("displayName");
+            user.setDisplayName(dn != null && !dn.trim().isEmpty() ? dn.trim() : null);
+        }
+        if (body.containsKey("bio")) {
+            String b = body.get("bio");
+            user.setBio(b != null ? b.trim() : null);
+        }
+        userRepository.save(user);
+        return ResponseEntity.ok(user);
+    }
+
     @GetMapping("/channels/latest")
     public ResponseEntity<Map<String, Date>> getLatestTimestamps() {
         List<Object[]> results = messageRepository.findLatestTimestamps();
@@ -157,6 +221,9 @@ public class ChatController {
         User sender = userRepository.findByUsername(principal.getName()).orElse(null);
         if (sender == null)
             return ResponseEntity.status(401).body("User not found");
+
+        if (!canAccessChannel(sender, messageDto.getChannel()))
+            return ResponseEntity.status(403).body("Forbidden");
 
         if ("taskis-bot".equals(messageDto.getChannel()) && !"Taskis Bot".equals(sender.getUsername())) {
             return ResponseEntity.status(403).body("Read-only channel");
@@ -218,6 +285,10 @@ public class ChatController {
         Message msg = messageRepository.findById(id).orElse(null);
         if (msg == null) return ResponseEntity.notFound().build();
 
+        User user = userRepository.findByUsername(principal.getName()).orElse(null);
+        if (user == null) return ResponseEntity.status(401).body("Unauthorized");
+        if (!canAccessChannel(user, msg.getChannel())) return ResponseEntity.status(403).body("Forbidden");
+
         String emoji = body.get("emoji");
         String username = principal.getName();
         if (emoji == null || emoji.isBlank()) return ResponseEntity.badRequest().body("emoji required");
@@ -265,7 +336,7 @@ public class ChatController {
         User user = userRepository.findByUsername(principal.getName()).orElse(null);
         if (user == null) return ResponseEntity.status(401).body("Unauthorized");
 
-        boolean isAdmin = "ADMIN".equals(user.getRole()) || "nelson".equalsIgnoreCase(user.getUsername());
+        boolean isAdmin = "ADMIN".equals(user.getRole());
         if (!msg.getSender().getUsername().equals(principal.getName()) && !isAdmin)
             return ResponseEntity.status(403).body("Forbidden");
 
@@ -306,13 +377,33 @@ public class ChatController {
     if (principal == null) return ResponseEntity.status(401).body("Unauthorized");
         Message msg = messageRepository.findById(id).orElse(null);
         if (msg == null) return ResponseEntity.notFound().build();
+        User reader = userRepository.findByUsername(principal.getName()).orElse(null);
+        if (reader == null) return ResponseEntity.status(401).body("Unauthorized");
+        if (!canAccessChannel(reader, msg.getChannel())) return ResponseEntity.status(403).body("Forbidden");
         String username = principal.getName();
         String readBy = msg.getReadBy() == null ? "" : msg.getReadBy();
         if (!java.util.Arrays.asList(readBy.split(",")).contains(username)) {
             msg.setReadBy(readBy.isBlank() ? username : readBy + "," + username);
-            messageRepository.save(msg);
+            Message saved = messageRepository.save(msg);
+            // Broadcast so senders see read receipts update live.
+            messagingTemplate.convertAndSend("/topic/" + saved.getChannel(), saved);
         }
         return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/messages/{id}/pin")
+    public ResponseEntity<?> togglePin(@PathVariable Long id, Principal principal) {
+        if (principal == null) return ResponseEntity.status(401).body("Unauthorized");
+        Message msg = messageRepository.findById(id).orElse(null);
+        if (msg == null) return ResponseEntity.notFound().build();
+        User user = userRepository.findByUsername(principal.getName()).orElse(null);
+        if (user == null) return ResponseEntity.status(401).body("Unauthorized");
+        if (!canAccessChannel(user, msg.getChannel())) return ResponseEntity.status(403).body("Forbidden");
+
+        msg.setPinned(!(msg.getPinned() != null && msg.getPinned()));
+        Message saved = messageRepository.save(msg);
+        messagingTemplate.convertAndSend("/topic/" + saved.getChannel(), saved);
+        return ResponseEntity.ok(saved);
     }
 
     @PostMapping("/upload")

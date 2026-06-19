@@ -41,6 +41,13 @@ public class User {
 
     private Boolean pictureChanged = false;
 
+    private Boolean active = true;
+
+    private String displayName;
+
+    @Column(length = 512)
+    private String bio;
+
     @Temporal(TemporalType.TIMESTAMP)
     private Date lastHeartbeat;
 

@@ -2,18 +2,21 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, Plus, Copy, Check, RefreshCw } from 'lucide-react';
+import { ChevronLeft, Plus, Copy, Check, RefreshCw, Power, Trash2, KeyRound } from 'lucide-react';
 import ThemeToggle from '../../components/ThemeToggle';
 import { initials, toneFor } from '../../components/Sidebar';
 
 export default function AdminDashboard() {
   const router = useRouter();
   const [users, setUsers] = useState<any[]>([]);
+  const [keys, setKeys] = useState<any[]>([]);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [newUsername, setNewUsername] = useState('');
   const [loading, setLoading] = useState(false);
 
   const api = (p: string) => `http://${window.location.hostname}:8080${p}`;
+  const authJson = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` });
+  const keyByString = (s: string) => keys.find((k) => k.keyString === s);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -26,9 +29,30 @@ export default function AdminDashboard() {
 
   const fetchData = async () => {
     try {
-      const res = await fetch(api('/api/admin/users'), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
-      setUsers(await res.json());
+      const [uRes, kRes] = await Promise.all([
+        fetch(api('/api/admin/users'), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }),
+        fetch(api('/api/admin/keys'), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }),
+      ]);
+      setUsers(await uRes.json());
+      setKeys(await kRes.json());
     } catch (e) { console.error(e); }
+  };
+
+  const setActive = async (id: number, active: boolean) => {
+    await fetch(api(`/api/admin/users/${id}/active`), { method: 'POST', headers: authJson(), body: JSON.stringify({ active }) });
+    fetchData();
+  };
+
+  const removeUser = async (id: number, name: string) => {
+    if (!confirm(`Remove ${name}? This deletes the account and revokes their key.`)) return;
+    await fetch(api(`/api/admin/users/${id}`), { method: 'DELETE', headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+    fetchData();
+  };
+
+  const revokeKey = async (keyId: number, name: string) => {
+    if (!confirm(`Revoke ${name}'s access key? They won't be able to register with it.`)) return;
+    await fetch(api(`/api/admin/keys/${keyId}/revoke`), { method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+    fetchData();
   };
 
   const generateKey = async (username: string) => {
@@ -121,43 +145,59 @@ export default function AdminDashboard() {
           </div>
 
           {/* column header */}
-          <div className="hidden sm:grid items-center gap-3.5 px-[22px] py-2.5 border-b border-border eyebrow" style={{ gridTemplateColumns: '1fr 220px 90px 80px', letterSpacing: '0.05em' }}>
-            <span>Operative</span><span>Access key</span><span>Role</span><span className="text-right">Actions</span>
+          <div className="hidden sm:grid items-center gap-3.5 px-[22px] py-2.5 border-b border-border eyebrow" style={{ gridTemplateColumns: '1fr 170px 150px', letterSpacing: '0.05em' }}>
+            <span>Operative</span><span>Access key</span><span className="text-right">Actions</span>
           </div>
 
-          {members.map((u: any) => (
-            <div key={u.id} className="grid items-center gap-3.5 px-[22px] py-3 border-b border-border last:border-b-0" style={{ gridTemplateColumns: '1fr 220px 90px 80px' }}>
+          {members.map((u: any) => {
+            const k = keyByString(u.registrationKey);
+            const isAdmin = u.role === 'ADMIN';
+            const inactive = u.active === false;
+            const keyStatus = k?.revoked ? 'Revoked' : k?.isUsed ? 'Used' : 'Active';
+            const keyColor = k?.revoked ? 'var(--danger)' : k?.isUsed ? 'var(--t3)' : 'var(--online)';
+            return (
+            <div key={u.id} className={`grid items-center gap-3.5 px-[22px] py-3 border-b border-border last:border-b-0 ${inactive ? 'opacity-55' : ''}`} style={{ gridTemplateColumns: '1fr 170px 150px' }}>
               <div className="flex items-center gap-3 min-w-0">
                 <span className="w-[34px] h-[34px] rounded-full grid place-items-center flex-none text-[13px] font-semibold text-white" style={{ background: toneFor(u.username) }}>
                   {initials(u.username)}
                 </span>
                 <div className="min-w-0">
-                  <div className="text-sm font-medium text-t1 truncate">{u.username}</div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-t1 truncate">{u.displayName || u.username}</span>
+                    {isAdmin && <span className="text-[10.5px] font-semibold text-accent-text bg-accent-soft rounded-full px-2 py-0.5">Admin</span>}
+                    {inactive && <span className="text-[10.5px] font-medium text-danger bg-danger-soft rounded-full px-2 py-0.5">Inactive</span>}
+                  </div>
                   <div className="text-[12.5px] text-t3">@{u.username.toLowerCase()}</div>
                 </div>
               </div>
-              <span className="font-mono text-[13px] text-t2 truncate hidden sm:block" title={u.registrationKey || ''}>{shortKey(u.registrationKey)}</span>
-              <span className="hidden sm:block">
-                {u.role === 'ADMIN' ? (
-                  <span className="text-[11.5px] font-semibold text-accent-text bg-accent-soft rounded-full px-2.5 py-0.5">Admin</span>
-                ) : (
-                  <span className="text-[11.5px] font-medium text-t3 bg-surface-2 border border-border rounded-full px-2.5 py-0.5">Operative</span>
+              <div className="hidden sm:flex flex-col min-w-0">
+                <span className="font-mono text-[13px] text-t2 truncate" title={u.registrationKey || ''}>{shortKey(u.registrationKey)}</span>
+                {u.registrationKey && (
+                  <span className="flex items-center gap-1.5 text-[11.5px]" style={{ color: keyColor }}>
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: keyColor }} />{keyStatus}
+                  </span>
                 )}
-              </span>
+              </div>
               <div className="flex justify-end gap-1">
                 <button onClick={() => copyToClipboard(u.registrationKey)} disabled={!u.registrationKey} className="icon-btn w-[30px] h-[30px] border-0 disabled:opacity-40" title="Copy key">
                   {copiedKey === u.registrationKey ? <Check className="w-[15px] h-[15px] text-online" /> : <Copy className="w-[15px] h-[15px]" />}
                 </button>
-                <button
-                  onClick={() => { if (confirm(`Regenerate access key for ${u.username}? This revokes the previous key.`)) generateKey(u.username); }}
-                  className="icon-btn w-[30px] h-[30px] border-0"
-                  title="Regenerate key"
-                >
+                <button onClick={() => { if (confirm(`Regenerate access key for ${u.username}? This replaces the previous key.`)) generateKey(u.username); }} className="icon-btn w-[30px] h-[30px] border-0" title="Regenerate key">
                   <RefreshCw className="w-[15px] h-[15px]" />
                 </button>
+                {!isAdmin && k && !k.revoked && (
+                  <button onClick={() => revokeKey(k.id, u.username)} className="icon-btn w-[30px] h-[30px] border-0" title="Revoke key"><KeyRound className="w-[15px] h-[15px]" /></button>
+                )}
+                {!isAdmin && (
+                  <button onClick={() => setActive(u.id, inactive)} className="icon-btn w-[30px] h-[30px] border-0" title={inactive ? 'Reactivate' : 'Deactivate'} style={inactive ? { color: 'var(--online)' } : undefined}><Power className="w-[15px] h-[15px]" /></button>
+                )}
+                {!isAdmin && (
+                  <button onClick={() => removeUser(u.id, u.username)} className="icon-btn w-[30px] h-[30px] border-0 hover:!text-danger" title="Remove member"><Trash2 className="w-[15px] h-[15px]" /></button>
+                )}
               </div>
             </div>
-          ))}
+            );
+          })}
 
           {members.length === 0 && (
             <div className="px-[22px] py-12 text-center text-t3 text-sm">No personnel found.</div>
