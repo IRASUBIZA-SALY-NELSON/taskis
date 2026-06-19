@@ -4,6 +4,7 @@ import React from 'react';
 import { Hash, Lock, Shield, LogOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import ThemeToggle from './ThemeToggle';
+import SettingsMenu from './SettingsMenu';
 import { disconnectWs } from '@/lib/ws';
 
 interface SidebarProps {
@@ -205,6 +206,7 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
               Online
             </div>
           </div>
+          <SettingsMenu />
           <ThemeToggle />
         </div>
         <div className="flex gap-1.5 mt-2.5">

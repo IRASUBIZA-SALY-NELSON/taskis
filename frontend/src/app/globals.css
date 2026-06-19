@@ -147,7 +147,7 @@ body {
   background-image: var(--wash);
   background-attachment: fixed;
   color: var(--t1);
-  font-family: var(--font-sans);
+  font-family: var(--font-user, var(--font-sans));
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
