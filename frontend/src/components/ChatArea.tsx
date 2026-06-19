@@ -33,6 +33,9 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   const [unlockLoading, setUnlockLoading] = useState(false);
   const [newCount, setNewCount] = useState(0);
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
+  const [members, setMembers] = useState<any[]>([]);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionSel, setMentionSel] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
   const editRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -41,6 +44,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   const prevLenRef = useRef(0);
   const unreadRef = useRef(0);
   const lastTyping = useRef(0);
+  const boundaryRef = useRef(0);
   const typingTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const isBot = channel === 'taskis-bot';
@@ -53,6 +57,51 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     fetch(api(`/api/chat/messages/${channel}`), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
       .then((r) => r.json()).then(setMessages).catch(() => {});
 
+  // Roster (for @mention autocomplete + notifications) and notification permission.
+  useEffect(() => {
+    fetch(api('/api/chat/users'), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
+      .then((r) => r.json()).then((d) => Array.isArray(d) && setMembers(d)).catch(() => {});
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {});
+    }
+  }, []);
+
+  const markChannelSeen = () => {
+    try {
+      const seen = JSON.parse(localStorage.getItem('seenAt') || '{}');
+      seen[channel] = Date.now();
+      localStorage.setItem('seenAt', JSON.stringify(seen));
+    } catch { /* noop */ }
+  };
+
+  const playPing = () => {
+    try {
+      const Ctx = (window.AudioContext || (window as any).webkitAudioContext);
+      if (!Ctx) return;
+      const ctx = new Ctx();
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.frequency.value = 660;
+      g.gain.setValueAtTime(0.0001, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.07, ctx.currentTime + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.25);
+      o.start();
+      o.stop(ctx.currentTime + 0.26);
+    } catch { /* noop */ }
+  };
+
+  const notify = (title: string, body: string) => {
+    try {
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        new Notification(title, { body: body.slice(0, 140) });
+      }
+    } catch { /* noop */ }
+  };
+
+  const mentionsMe = (text: string) =>
+    !!text && new RegExp(`(^|\\s)@${user.username}\\b`, 'i').test(text);
+
   useEffect(() => {
     setLoading(true);
     setMessages([]);
@@ -61,9 +110,13 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     nearBottomRef.current = true;
     prevLenRef.current = 0;
     unreadRef.current = 0;
+    try {
+      const seen = JSON.parse(localStorage.getItem('seenAt') || '{}');
+      boundaryRef.current = seen[channel] || 0;
+    } catch { boundaryRef.current = 0; }
     fetch(api(`/api/chat/messages/${channel}`), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
       .then((r) => { if (r.status === 401 || r.status === 403) { localStorage.clear(); window.location.href = '/'; } return r.json(); })
-      .then((d) => { setMessages(d); setLoading(false); })
+      .then((d) => { setMessages(d); setLoading(false); markChannelSeen(); })
       .catch(() => setLoading(false));
   }, [channel]);
 
@@ -73,7 +126,19 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
       setMessages((prev) => {
         const i = prev.findIndex((m) => m.id === incoming.id);
         if (i === -1) {
-          if (document.hidden) { unreadRef.current += 1; document.title = `(${unreadRef.current}) Taskis`; }
+          const fromOther = incoming.sender?.username && incoming.sender.username !== user.username;
+          const mentioned = fromOther && mentionsMe(incoming.content || '');
+          if (fromOther) {
+            if (document.hidden) {
+              unreadRef.current += 1;
+              document.title = `(${unreadRef.current}) Taskis`;
+              notify(`${incoming.sender.username}${mentioned ? ' mentioned you' : ''}`, incoming.content || 'Sent an attachment');
+              playPing();
+            } else {
+              markChannelSeen();
+              if (mentioned) playPing();
+            }
+          }
           return [...prev, incoming];
         }
         const copy = prev.slice();
@@ -261,12 +326,41 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
 
   const fileNameOf = (url: string) => url.split('/').pop()?.split('_').slice(1).join('_') || 'Document';
 
-  const linkify = (text: string) =>
-    text.split(/(https?:\/\/[^\s]+)/g).map((part, i) =>
-      /^https?:\/\//.test(part)
-        ? <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="underline text-accent-text break-all hover:opacity-80">{part}</a>
-        : <span key={i}>{part}</span>,
-    );
+  const renderContent = (text: string) =>
+    text.split(/(https?:\/\/[^\s]+|@\w+)/g).map((part, i) => {
+      if (/^https?:\/\//.test(part)) {
+        return <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="underline text-accent-text break-all hover:opacity-80">{part}</a>;
+      }
+      if (/^@\w+$/.test(part)) {
+        const name = part.slice(1);
+        const known = members.some((m) => m.username?.toLowerCase() === name.toLowerCase()) || name.toLowerCase() === user.username.toLowerCase();
+        if (!known) return <span key={i}>{part}</span>;
+        const isMe = name.toLowerCase() === user.username.toLowerCase();
+        return (
+          <span key={i} className="font-medium" style={{ color: 'var(--accent-text)', background: isMe ? 'var(--accent-soft)' : 'transparent', borderRadius: 4, padding: isMe ? '0 3px' : 0 }}>{part}</span>
+        );
+      }
+      return <span key={i}>{part}</span>;
+    });
+
+  const detectMention = (val: string, pos: number) => {
+    const upto = val.slice(0, pos);
+    const m = upto.match(/(?:^|\s)@(\w*)$/);
+    setMentionQuery(m ? m[1] : null);
+    setMentionSel(0);
+  };
+
+  const insertMention = (username: string) => {
+    const ta = taRef.current;
+    const pos = ta?.selectionStart ?? input.length;
+    const upto = input.slice(0, pos).replace(/(^|\s)@(\w*)$/, `$1@${username} `);
+    const next = upto + input.slice(pos);
+    setInput(next);
+    setMentionQuery(null);
+    setTimeout(() => {
+      if (ta) { ta.focus(); ta.setSelectionRange(upto.length, upto.length); autoGrow(); }
+    }, 0);
+  };
 
   const autoGrow = () => {
     const ta = taRef.current;
@@ -274,6 +368,12 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   };
 
   const onComposerKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (mentionQuery !== null && mentionMatches.length) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setMentionSel((s) => Math.min(s + 1, mentionMatches.length - 1)); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setMentionSel((s) => Math.max(s - 1, 0)); return; }
+      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); insertMention(mentionMatches[mentionSel].username); return; }
+      if (e.key === 'Escape') { setMentionQuery(null); return; }
+    }
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(e as any); }
   };
 
@@ -287,6 +387,17 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     : typingUsers.length === 2
       ? `${typingUsers[0]} and ${typingUsers[1]} are typing…`
       : 'Several people are typing…';
+
+  const mentionMatches = mentionQuery === null ? [] : members
+    .filter((m) => m.username && m.username !== 'Taskis Bot' && m.username.toLowerCase().startsWith(mentionQuery.toLowerCase()))
+    .slice(0, 6);
+
+  const firstUnreadId = (() => {
+    const b = boundaryRef.current;
+    if (!b || !messages.length) return null;
+    const m = messages.find((mm) => new Date(mm.timestamp).getTime() > b && mm.sender?.username !== user.username);
+    return m ? m.id : null;
+  })();
 
   const Attachment = ({ msg, mine }: { msg: any; mine: boolean }) => {
     if (!msg.attachmentUrl) return null;
@@ -375,6 +486,13 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                     <div className="flex-1 h-px bg-border" />
                   </div>
                 )}
+                {msg.id === firstUnreadId && (
+                  <div className="flex items-center gap-3 my-[14px]">
+                    <div className="flex-1 h-px" style={{ background: 'var(--accent-line)' }} />
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-accent-text">New messages</span>
+                    <div className="flex-1 h-px" style={{ background: 'var(--accent-line)' }} />
+                  </div>
+                )}
 
                 <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={`group flex gap-[11px] ${grouped ? 'mt-0.5' : 'mt-3.5'} ${isMe ? 'flex-row-reverse' : ''}`}>
                   {/* avatar (others only; hidden when grouped but space preserved) */}
@@ -413,7 +531,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                           className={`px-[13px] py-[9px] text-[14.5px] leading-relaxed border border-border whitespace-pre-wrap break-words ${isDeleted ? 'opacity-50 italic text-t2' : 'text-t1'}`}
                           style={{ background: isMe ? 'var(--bubble-own)' : 'var(--bubble-other)', borderRadius: isMe ? '15px 5px 15px 15px' : '5px 15px 15px 15px' }}
                         >
-                          {msg.content && <span>{isDeleted ? msg.content : linkify(msg.content)}</span>}
+                          {msg.content && <span>{isDeleted ? msg.content : renderContent(msg.content)}</span>}
                           {!isDeleted && <Attachment msg={msg} mine={isMe} />}
                         </div>
                       </div>
@@ -555,12 +673,28 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                   )}
                 </div>
               )}
-              <form onSubmit={send} className="flex items-center gap-1.5 rounded-[14px] border border-border-strong bg-surface-2 p-1.5">
+              <form onSubmit={send} className="relative flex items-center gap-1.5 rounded-[14px] border border-border-strong bg-surface-2 p-1.5">
+                {mentionQuery !== null && mentionMatches.length > 0 && (
+                  <div className="card absolute bottom-full mb-2 left-0 w-[240px] py-1 z-50" style={{ boxShadow: 'var(--shadow-lg), var(--edge-hi)' }}>
+                    {mentionMatches.map((m, i) => (
+                      <button
+                        type="button"
+                        key={m.id ?? m.username}
+                        onMouseDown={(e) => { e.preventDefault(); insertMention(m.username); }}
+                        onMouseEnter={() => setMentionSel(i)}
+                        className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-left transition-colors ${i === mentionSel ? 'bg-hover' : ''}`}
+                      >
+                        <span className="w-6 h-6 rounded-full grid place-items-center flex-none text-[10px] font-semibold text-white" style={{ background: toneFor(m.username) }}>{initials(m.username)}</span>
+                        <span className="text-[13px] text-t1">{m.username}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <label className="icon-btn w-[34px] h-[34px] border-0 cursor-pointer">
                   <Paperclip className="w-[18px] h-[18px]" />
                   <input type="file" className="hidden" onChange={(e) => pickFile(e.target.files?.[0] || null)} />
                 </label>
-                <textarea ref={taRef} rows={1} value={input} onChange={(e) => { setInput(e.target.value); autoGrow(); notifyTyping(); }} onKeyDown={onComposerKey} placeholder={`Message ${isChannel ? '#' + channel : headerTitle}`} className="scroll flex-1 min-w-0 bg-transparent border-0 outline-none resize-none text-[14.5px] leading-relaxed text-t1 px-1 py-2 max-h-[140px]" />
+                <textarea ref={taRef} rows={1} value={input} onChange={(e) => { setInput(e.target.value); autoGrow(); notifyTyping(); detectMention(e.target.value, e.target.selectionStart ?? e.target.value.length); }} onKeyDown={onComposerKey} placeholder={`Message ${isChannel ? '#' + channel : headerTitle}`} className="scroll flex-1 min-w-0 bg-transparent border-0 outline-none resize-none text-[14.5px] leading-relaxed text-t1 px-1 py-2 max-h-[140px]" />
                 <button type="submit" disabled={(!input.trim() && !file) || uploading} aria-label="Send" className="btn-accent w-[34px] h-[34px] rounded-[10px] flex-none">
                   {uploading ? <span className="w-[15px] h-[15px] rounded-full border-2 border-white/35 border-t-white tk-spin" /> : <Send className="w-[17px] h-[17px]" />}
                 </button>
