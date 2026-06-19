@@ -370,6 +370,21 @@ public class ChatController {
         return ResponseEntity.ok().build();
     }
 
+    @PostMapping("/messages/{id}/pin")
+    public ResponseEntity<?> togglePin(@PathVariable Long id, Principal principal) {
+        if (principal == null) return ResponseEntity.status(401).body("Unauthorized");
+        Message msg = messageRepository.findById(id).orElse(null);
+        if (msg == null) return ResponseEntity.notFound().build();
+        User user = userRepository.findByUsername(principal.getName()).orElse(null);
+        if (user == null) return ResponseEntity.status(401).body("Unauthorized");
+        if (!canAccessChannel(user, msg.getChannel())) return ResponseEntity.status(403).body("Forbidden");
+
+        msg.setPinned(!(msg.getPinned() != null && msg.getPinned()));
+        Message saved = messageRepository.save(msg);
+        messagingTemplate.convertAndSend("/topic/" + saved.getChannel(), saved);
+        return ResponseEntity.ok(saved);
+    }
+
     @PostMapping("/upload")
     public ResponseEntity<?> uploadFile(@RequestParam("file") MultipartFile file) {
         try {

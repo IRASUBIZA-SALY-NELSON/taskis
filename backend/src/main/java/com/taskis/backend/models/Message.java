@@ -49,4 +49,6 @@ public class Message {
     private Boolean edited = false;
 
     private Boolean deleted = false;
+
+    private Boolean pinned = false;
 }

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Send, Paperclip, FileText, Download, Lock, Menu, X, AlertCircle, MessageSquare, MoreVertical, Reply, Pencil, Trash2, SmilePlus, CheckCheck } from 'lucide-react';
+import { Send, Paperclip, FileText, Download, Lock, Menu, X, AlertCircle, MessageSquare, MoreVertical, Reply, Pencil, Trash2, SmilePlus, CheckCheck, Search, Pin, Bookmark, BookmarkCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { initials, toneFor } from './Sidebar';
 import { subscribe, publish } from '@/lib/ws';
@@ -36,6 +36,12 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   const [members, setMembers] = useState<any[]>([]);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionSel, setMentionSel] = useState(0);
+  const [search, setSearch] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
+  const [savedActive, setSavedActive] = useState(false);
+  const [pinnedOpen, setPinnedOpen] = useState(false);
+  const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
+  const [highlightId, setHighlightId] = useState<number | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const editRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -65,6 +71,53 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
       Notification.requestPermission().catch(() => {});
     }
   }, []);
+
+  const savedKey = `saved_${user.username}`;
+  useEffect(() => {
+    try {
+      const arr = JSON.parse(localStorage.getItem(savedKey) || '[]');
+      setSavedIds(new Set(arr));
+    } catch { /* noop */ }
+  }, [savedKey]);
+
+  const toggleSave = (id: number) => {
+    setMenuId(null);
+    setSavedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      try { localStorage.setItem(savedKey, JSON.stringify([...next])); } catch { /* noop */ }
+      return next;
+    });
+  };
+
+  const togglePin = async (id: number) => {
+    setMenuId(null);
+    await fetch(api(`/api/chat/messages/${id}/pin`), { method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+    fetchMsgs();
+  };
+
+  const scrollToMessage = (id: number) => {
+    // Clear any active filter so the target is actually rendered, then scroll + flash.
+    setPinnedOpen(false);
+    setShowSearch(false);
+    setSearch('');
+    setSavedActive(false);
+    setHighlightId(id);
+    setTimeout(() => {
+      document.querySelector(`[data-mid="${id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 60);
+    setTimeout(() => setHighlightId((h) => (h === id ? null : h)), 1700);
+  };
+
+  const highlight = (text: string, q: string) => {
+    if (!q.trim()) return text;
+    const parts = text.split(new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'ig'));
+    return parts.map((p, i) =>
+      p.toLowerCase() === q.toLowerCase()
+        ? <mark key={i} style={{ background: 'var(--accent-soft)', color: 'var(--accent-text)', borderRadius: 3, padding: '0 1px' }}>{p}</mark>
+        : <span key={i}>{p}</span>,
+    );
+  };
 
   const markChannelSeen = () => {
     try {
@@ -399,6 +452,15 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     return m ? m.id : null;
   })();
 
+  const searchActive = showSearch && search.trim().length > 0;
+  const pinnedMsgs = messages.filter((m) => m.pinned && !m.deleted);
+  const view = searchActive
+    ? messages.filter((m) => (m.content || '').toLowerCase().includes(search.trim().toLowerCase()))
+    : savedActive
+      ? messages.filter((m) => savedIds.has(m.id))
+      : messages;
+  const filtering = searchActive || savedActive;
+
   const Attachment = ({ msg, mine }: { msg: any; mine: boolean }) => {
     if (!msg.attachmentUrl) return null;
     const full = api(msg.attachmentUrl);
@@ -435,6 +497,48 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
           <div className="text-[15.5px] font-semibold text-t1 leading-tight truncate">{headerTitle}</div>
           <div className="flex items-center gap-1.5 text-xs text-t2 mt-px"><Lock className="w-[11px] h-[11px]" />{headerSub}</div>
         </div>
+
+        <div className="flex items-center gap-1.5 flex-none">
+          {showSearch && (
+            <input
+              autoFocus
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search messages…"
+              className="tk-input hidden sm:block"
+              style={{ width: 190, padding: '7px 12px', fontSize: 13 }}
+            />
+          )}
+          <button onClick={() => { setShowSearch((s) => !s); setSearch(''); setSavedActive(false); }} className="icon-btn w-8 h-8" title="Search">
+            <Search className="w-[15px] h-[15px]" />
+          </button>
+
+          <div className="relative" data-menu>
+            <button onClick={(e) => { e.stopPropagation(); setPinnedOpen((o) => !o); }} className="icon-btn w-8 h-8 relative" title="Pinned messages">
+              <Pin className="w-[15px] h-[15px]" />
+              {pinnedMsgs.length > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[15px] h-[15px] px-1 rounded-full bg-accent text-on-accent text-[9px] font-bold grid place-items-center">{pinnedMsgs.length}</span>
+              )}
+            </button>
+            {pinnedOpen && (
+              <div className="card absolute right-0 top-full mt-2 w-[300px] max-h-[340px] overflow-y-auto scroll z-50 py-1" style={{ boxShadow: 'var(--shadow-lg), var(--edge-hi)' }} onClick={(e) => e.stopPropagation()}>
+                <div className="eyebrow px-3 py-2">Pinned</div>
+                {pinnedMsgs.length === 0 ? (
+                  <div className="px-3 py-3 text-[13px] text-t3">No pinned messages yet.</div>
+                ) : pinnedMsgs.map((m) => (
+                  <button key={m.id} onClick={() => scrollToMessage(m.id)} className="w-full text-left px-3 py-2 hover:bg-hover transition-colors">
+                    <div className="text-[12px] font-semibold text-t1">{m.sender?.username}</div>
+                    <div className="text-[12.5px] text-t2 truncate">{m.content || 'Attachment'}</div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <button onClick={() => { setSavedActive((a) => !a); setShowSearch(false); setSearch(''); }} className="icon-btn w-8 h-8" title="Saved messages" style={savedActive ? { background: 'var(--accent-soft)', color: 'var(--accent-text)', borderColor: 'var(--accent-line)' } : undefined}>
+            {savedActive ? <BookmarkCheck className="w-[15px] h-[15px]" /> : <Bookmark className="w-[15px] h-[15px]" />}
+          </button>
+        </div>
       </header>
 
       {/* messages */}
@@ -457,19 +561,27 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
               </div>
             ))}
           </div>
-        ) : messages.length === 0 ? (
+        ) : view.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center px-5 gap-3.5">
-            <div className="w-[54px] h-[54px] rounded-[14px] bg-surface-2 border border-border grid place-items-center text-t3"><MessageSquare className="w-[22px] h-[22px]" /></div>
+            <div className="w-[54px] h-[54px] rounded-[14px] bg-surface-2 border border-border grid place-items-center text-t3">
+              {filtering ? <Search className="w-[22px] h-[22px]" /> : <MessageSquare className="w-[22px] h-[22px]" />}
+            </div>
             <div>
-              <div className="text-base font-semibold text-t1">No messages yet</div>
-              <div className="text-[13.5px] text-t2 mt-1 max-w-[300px] leading-relaxed">Start the conversation. Every message in {isChannel ? `#${channel}` : 'this thread'} is end-to-end encrypted.</div>
+              <div className="text-base font-semibold text-t1">{searchActive ? 'No matches' : savedActive ? 'No saved messages' : 'No messages yet'}</div>
+              <div className="text-[13.5px] text-t2 mt-1 max-w-[300px] leading-relaxed">
+                {searchActive
+                  ? `Nothing in this channel matches “${search.trim()}”.`
+                  : savedActive
+                    ? 'Save messages from their menu to find them here.'
+                    : `Start the conversation. Every message in ${isChannel ? `#${channel}` : 'this thread'} is end-to-end encrypted.`}
+              </div>
             </div>
           </div>
         ) : (
-          messages.map((msg, idx) => {
+          view.map((msg, idx) => {
             const isMe = msg.sender?.username === user.username;
-            const showDivider = idx === 0 || !sameDay(msg.timestamp, messages[idx - 1].timestamp);
-            const prev = idx > 0 ? messages[idx - 1] : null;
+            const showDivider = idx === 0 || !sameDay(msg.timestamp, view[idx - 1].timestamp);
+            const prev = idx > 0 ? view[idx - 1] : null;
             const grouped = !!prev && !showDivider && prev.sender?.username === msg.sender?.username
               && (new Date(msg.timestamp).getTime() - new Date(prev.timestamp).getTime()) < 5 * 60 * 1000;
             const rx = parseRx(msg.reactions);
@@ -494,7 +606,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                   </div>
                 )}
 
-                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={`group flex gap-[11px] ${grouped ? 'mt-0.5' : 'mt-3.5'} ${isMe ? 'flex-row-reverse' : ''}`}>
+                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} data-mid={msg.id} className={`group flex gap-[11px] ${grouped ? 'mt-0.5' : 'mt-3.5'} ${isMe ? 'flex-row-reverse' : ''} transition-colors duration-500 rounded-xl`} style={highlightId === msg.id ? { background: 'var(--accent-soft)' } : undefined}>
                   {/* avatar (others only; hidden when grouped but space preserved) */}
                   {!isMe && (
                     grouped ? (
@@ -513,15 +625,22 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                         <span className="text-[13px] font-semibold text-t1">{isMe ? 'You' : msg.sender?.username}</span>
                         <span className="text-[11px] text-t3">{fmt(msg.timestamp)}</span>
                         {msg.edited && !isDeleted && <span className="text-[11px] text-t3 italic">edited</span>}
+                        {msg.pinned && <Pin className="w-[11px] h-[11px] text-accent-text" />}
                       </div>
                     )}
 
-                    {/* reply preview */}
+                    {/* reply preview (click to jump to original) */}
                     {msg.replyTo && (
-                      <div className={`mb-1 px-2.5 py-1 rounded-lg border-l-2 text-xs text-t2 max-w-xs truncate ${isMe ? 'self-end' : 'self-start'}`} style={{ borderColor: 'var(--accent-line)', background: 'var(--surface-2)' }}>
-                        <span className="font-semibold text-accent-text mr-1">{msg.replyTo.sender?.username}</span>
-                        {msg.replyTo.content || 'Attachment'}
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => scrollToMessage(msg.replyTo.id)}
+                        className={`mb-1 flex items-center gap-1.5 px-2.5 py-1 rounded-lg border-l-2 text-xs text-t2 max-w-xs truncate text-left hover:text-t1 transition-colors ${isMe ? 'self-end' : 'self-start'}`}
+                        style={{ borderColor: 'var(--accent-line)', background: 'var(--surface-2)' }}
+                      >
+                        <Reply className="w-3 h-3 flex-none text-accent-text" />
+                        <span className="font-semibold text-accent-text">{msg.replyTo.sender?.username}</span>
+                        <span className="truncate opacity-80">{msg.replyTo.content || 'Attachment'}</span>
+                      </button>
                     )}
 
                     {/* bubble + hover actions */}
@@ -531,7 +650,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                           className={`px-[13px] py-[9px] text-[14.5px] leading-relaxed border border-border whitespace-pre-wrap break-words ${isDeleted ? 'opacity-50 italic text-t2' : 'text-t1'}`}
                           style={{ background: isMe ? 'var(--bubble-own)' : 'var(--bubble-other)', borderRadius: isMe ? '15px 5px 15px 15px' : '5px 15px 15px 15px' }}
                         >
-                          {msg.content && <span>{isDeleted ? msg.content : renderContent(msg.content)}</span>}
+                          {msg.content && <span>{isDeleted ? msg.content : (searchActive ? highlight(msg.content, search.trim()) : renderContent(msg.content))}</span>}
                           {!isDeleted && <Attachment msg={msg} mine={isMe} />}
                         </div>
                       </div>
@@ -553,20 +672,22 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                           </div>
                           {/* reply */}
                           <button onClick={(e) => { e.stopPropagation(); setReplyTo(msg); }} className={actionBtnCls} aria-label="Reply"><Reply className="w-[14px] h-[14px]" /></button>
-                          {/* menu (own) */}
-                          {isMe && (
-                            <div className="relative" data-menu>
-                              <button onClick={(e) => { e.stopPropagation(); setMenuId(menuId === msg.id ? null : msg.id); setEmojiId(null); }} className={actionBtnCls} aria-label="More"><MoreVertical className="w-[14px] h-[14px]" /></button>
-                              {menuId === msg.id && (
-                                <div className={`card absolute z-50 bottom-full mb-1.5 ${isMe ? 'right-0' : 'left-0'} overflow-hidden min-w-[140px] py-1`} style={{ boxShadow: 'var(--shadow-lg), var(--edge-hi)' }} onClick={(e) => e.stopPropagation()}>
-                                  {canEdit && (
-                                    <button onClick={() => startEdit(msg)} className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-t1 hover:bg-hover transition-colors"><Pencil className="w-[14px] h-[14px] text-t2" /> Edit</button>
-                                  )}
+                          {/* menu */}
+                          <div className="relative" data-menu>
+                            <button onClick={(e) => { e.stopPropagation(); setMenuId(menuId === msg.id ? null : msg.id); setEmojiId(null); }} className={actionBtnCls} aria-label="More"><MoreVertical className="w-[14px] h-[14px]" /></button>
+                            {menuId === msg.id && (
+                              <div className={`card absolute z-50 bottom-full mb-1.5 ${isMe ? 'right-0' : 'left-0'} overflow-hidden min-w-[152px] py-1`} style={{ boxShadow: 'var(--shadow-lg), var(--edge-hi)' }} onClick={(e) => e.stopPropagation()}>
+                                <button onClick={() => togglePin(msg.id)} className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-t1 hover:bg-hover transition-colors"><Pin className="w-[14px] h-[14px] text-t2" /> {msg.pinned ? 'Unpin' : 'Pin'}</button>
+                                <button onClick={() => toggleSave(msg.id)} className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-t1 hover:bg-hover transition-colors">{savedIds.has(msg.id) ? <BookmarkCheck className="w-[14px] h-[14px] text-accent-text" /> : <Bookmark className="w-[14px] h-[14px] text-t2" />} {savedIds.has(msg.id) ? 'Unsave' : 'Save'}</button>
+                                {canEdit && (
+                                  <button onClick={() => startEdit(msg)} className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-t1 hover:bg-hover transition-colors"><Pencil className="w-[14px] h-[14px] text-t2" /> Edit</button>
+                                )}
+                                {isMe && (
                                   <button onClick={() => deleteMsg(msg.id)} className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-danger hover:bg-danger-soft transition-colors"><Trash2 className="w-[14px] h-[14px]" /> Delete</button>
-                                </div>
-                              )}
-                            </div>
-                          )}
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
