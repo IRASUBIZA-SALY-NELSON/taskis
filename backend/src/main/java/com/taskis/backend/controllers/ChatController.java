@@ -318,14 +318,22 @@ public class ChatController {
     @PostMapping("/upload")
     public ResponseEntity<?> uploadFile(@RequestParam("file") MultipartFile file) {
         try {
-            String uploadDir = System.getProperty("user.dir") + "/uploads/";
-            Files.createDirectories(Paths.get(uploadDir));
+            Path base = Paths.get(System.getProperty("user.dir"), "uploads").toAbsolutePath().normalize();
+            Files.createDirectories(base);
 
-            String fileName = UUID.randomUUID().toString() + "_" + file.getOriginalFilename();
-            Path filePath = Paths.get(uploadDir + fileName);
+            String original = file.getOriginalFilename() == null ? "file" : file.getOriginalFilename();
+            // Drop any path component and keep only a safe, flat filename to prevent traversal.
+            String safeName = Paths.get(original).getFileName().toString().replaceAll("[^A-Za-z0-9._-]", "_");
+            String fileName = UUID.randomUUID().toString() + "_" + safeName;
+
+            Path filePath = base.resolve(fileName).normalize();
+            if (!filePath.startsWith(base)) {
+                return ResponseEntity.badRequest().body("Invalid file path");
+            }
             Files.copy(file.getInputStream(), filePath);
 
-            return ResponseEntity.ok(Map.of("url", "/uploads/" + fileName, "type", file.getContentType()));
+            return ResponseEntity.ok(Map.of("url", "/uploads/" + fileName, "type",
+                    file.getContentType() == null ? "application/octet-stream" : file.getContentType()));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body("Could not upload file: " + e.getMessage());
         }
