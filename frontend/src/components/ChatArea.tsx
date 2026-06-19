@@ -2,14 +2,14 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Send, Paperclip, FileText, Download, Lock, Menu, X, AlertCircle, MessageSquare, MoreVertical, Reply, Pencil, Trash2, SmilePlus, CheckCheck, Search, Pin, Bookmark, BookmarkCheck, Mic, Square } from 'lucide-react';
+import { Send, Paperclip, FileText, Download, Lock, Menu, X, AlertCircle, MessageSquare, MoreVertical, Reply, Pencil, Trash2, SmilePlus, CheckCheck, Search, Pin, Bookmark, BookmarkCheck, Mic, Square, Smile } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { initials, toneFor, displayOf } from './Sidebar';
 import { subscribe, publish } from '@/lib/ws';
+import EmojiGifPicker from './EmojiGifPicker';
 
 interface ChatAreaProps { user: any; channel: string; onToggleSidebar: () => void; }
 
-const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '😡', '🔥', '🎉', '👀', '💯', '✅', '🙏'];
 const api = (path: string) => `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:8080${path}`;
 const authH = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' });
 
@@ -44,6 +44,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   const [highlightId, setHighlightId] = useState<number | null>(null);
   const [recording, setRecording] = useState(false);
   const [recSeconds, setRecSeconds] = useState(0);
+  const [showComposerPicker, setShowComposerPicker] = useState(false);
   const mediaRecRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const recTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -482,6 +483,26 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     if (now - lastTyping.current > 1800) { lastTyping.current = now; publish('/app/chat.typing', { channel }); }
   };
 
+  const insertEmoji = (e: string) => {
+    const ta = taRef.current;
+    const pos = ta?.selectionStart ?? input.length;
+    const next = input.slice(0, pos) + e + input.slice(pos);
+    setInput(next);
+    setTimeout(() => { if (ta) { ta.focus(); const c = pos + e.length; ta.setSelectionRange(c, c); autoGrow(); } }, 0);
+  };
+
+  const sendGif = async (url: string) => {
+    setShowComposerPicker(false);
+    await fetch(api('/api/chat/send'), {
+      method: 'POST',
+      headers: authH(),
+      body: JSON.stringify({ content: '', channel, attachmentUrl: url, attachmentType: 'image/gif', replyToId: replyTo?.id ?? null }),
+    });
+    setReplyTo(null);
+    nearBottomRef.current = true;
+    fetchMsgs();
+  };
+
   const typingText = typingUsers.length === 1
     ? `${typingUsers[0]} is typing…`
     : typingUsers.length === 2
@@ -510,7 +531,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
 
   const Attachment = ({ msg, mine }: { msg: any; mine: boolean }) => {
     if (!msg.attachmentUrl) return null;
-    const full = api(msg.attachmentUrl);
+    const full = msg.attachmentUrl.startsWith('http') ? msg.attachmentUrl : api(msg.attachmentUrl);
     if (msg.attachmentType?.startsWith('image/')) {
       return (
         <button onClick={() => setBigImage(full)} className="block w-[282px] max-w-full rounded-[14px] overflow-hidden border border-border cursor-zoom-in hover:border-border-strong transition-colors p-0 bg-transparent mt-1.5">
@@ -718,11 +739,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                               <SmilePlus className="w-[14px] h-[14px]" />
                             </button>
                             {emojiId === msg.id && (
-                              <div className={`card absolute z-50 bottom-full mb-1.5 ${isMe ? 'right-0' : 'left-0'} p-2 flex flex-wrap gap-1 w-[200px]`} style={{ boxShadow: 'var(--shadow-lg), var(--edge-hi)' }} onClick={(e) => e.stopPropagation()}>
-                                {EMOJIS.map((em) => (
-                                  <button key={em} onClick={() => react(msg.id, em)} className="text-lg hover:scale-125 transition-transform p-1 rounded-md hover:bg-hover">{em}</button>
-                                ))}
-                              </div>
+                              <EmojiGifPicker reactMode align={isMe ? 'right' : 'left'} onEmoji={(em) => react(msg.id, em)} onClose={() => setEmojiId(null)} />
                             )}
                           </div>
                           {/* reply */}
@@ -887,6 +904,12 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                   <input type="file" className="hidden" onChange={(e) => pickFile(e.target.files?.[0] || null)} />
                 </label>
                 <button type="button" onClick={startRec} className="icon-btn w-[34px] h-[34px] border-0" title="Record voice note"><Mic className="w-[18px] h-[18px]" /></button>
+                <div className="relative" data-menu>
+                  <button type="button" onClick={(e) => { e.stopPropagation(); setShowComposerPicker((s) => !s); }} className="icon-btn w-[34px] h-[34px] border-0" title="Emoji & GIFs"><Smile className="w-[18px] h-[18px]" /></button>
+                  {showComposerPicker && (
+                    <EmojiGifPicker onEmoji={insertEmoji} onGif={sendGif} onClose={() => setShowComposerPicker(false)} />
+                  )}
+                </div>
                 <textarea ref={taRef} rows={1} value={input} onChange={(e) => { setInput(e.target.value); autoGrow(); notifyTyping(); detectMention(e.target.value, e.target.selectionStart ?? e.target.value.length); }} onKeyDown={onComposerKey} placeholder={`Message ${isChannel ? '#' + channel : headerTitle}`} className="scroll flex-1 min-w-0 bg-transparent border-0 outline-none resize-none text-[14.5px] leading-relaxed text-t1 px-1 py-2 max-h-[140px]" />
                 <button type="submit" disabled={(!input.trim() && !file) || uploading} aria-label="Send" className="btn-accent w-[34px] h-[34px] rounded-[10px] flex-none">
                   {uploading ? <span className="w-[15px] h-[15px] rounded-full border-2 border-white/35 border-t-white tk-spin" /> : <Send className="w-[17px] h-[17px]" />}
