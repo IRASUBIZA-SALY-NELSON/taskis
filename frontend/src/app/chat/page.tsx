@@ -4,6 +4,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import ChatArea from '@/components/ChatArea';
+import PostsFeed from '@/components/PostsFeed';
 
 export default function ChatLayout() {
   const router = useRouter();
@@ -53,11 +54,15 @@ export default function ChatLayout() {
       />
 
       <main className="flex-1 flex flex-col relative h-full min-w-0 bg-bg">
-        <ChatArea
-          user={user}
-          channel={activeChannel}
-          onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-        />
+        {activeChannel === '__posts__' ? (
+          <PostsFeed user={user} />
+        ) : (
+          <ChatArea
+            user={user}
+            channel={activeChannel}
+            onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+          />
+        )}
       </main>
     </div>
   );

@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Hash, Lock, Shield, LogOut } from 'lucide-react';
+import { Hash, Lock, Shield, LogOut, Newspaper } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import ThemeToggle from './ThemeToggle';
 import SettingsMenu from './SettingsMenu';
@@ -123,6 +123,11 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
 
       {/* lists */}
       <div className="scroll flex-1 overflow-y-auto px-2 py-2.5">
+        <button onClick={() => setActiveChannel('__posts__')} className={itemCls(activeChannel === '__posts__')}>
+          <Newspaper className="w-[15px] h-[15px] flex-none" style={{ color: activeChannel === '__posts__' ? 'var(--accent-text)' : 'var(--t3)' }} />
+          <span className="flex-1 text-sm font-medium">Feed</span>
+        </button>
+
         <SectionLabel>Channels</SectionLabel>
         {channels.map((c) => {
           const active = activeChannel === c;
