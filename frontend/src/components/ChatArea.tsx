@@ -18,6 +18,8 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   const [loading, setLoading] = useState(true);
   const [input, setInput] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [bigImage, setBigImage] = useState<string | null>(null);
   const [replyTo, setReplyTo] = useState<any>(null);
@@ -137,6 +139,42 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     return () => document.removeEventListener('mousedown', close);
   }, []);
 
+  const pickFile = (f: File | null) => {
+    if (filePreview) URL.revokeObjectURL(filePreview);
+    setFile(f);
+    setFilePreview(f && f.type.startsWith('image/') ? URL.createObjectURL(f) : null);
+  };
+
+  const clearFile = () => {
+    if (filePreview) URL.revokeObjectURL(filePreview);
+    setFile(null);
+    setFilePreview(null);
+    setProgress(0);
+  };
+
+  const formatBytes = (n: number) => {
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+    return `${(n / 1024 / 1024).toFixed(1)} MB`;
+  };
+
+  const uploadWithProgress = (f: File): Promise<{ url: string; type: string }> =>
+    new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', api('/api/chat/upload'));
+      xhr.setRequestHeader('Authorization', `Bearer ${localStorage.getItem('token')}`);
+      xhr.upload.onprogress = (ev) => { if (ev.lengthComputable) setProgress(Math.round((ev.loaded / ev.total) * 100)); };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try { resolve(JSON.parse(xhr.responseText)); } catch { reject(new Error('Bad response')); }
+        } else reject(new Error(xhr.responseText || 'Upload failed'));
+      };
+      xhr.onerror = () => reject(new Error('Network error'));
+      const fd = new FormData();
+      fd.append('file', f);
+      xhr.send(fd);
+    });
+
   const send = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() && !file) return;
@@ -144,17 +182,18 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     let attachmentType = null;
     if (file) {
       setUploading(true);
-      const fd = new FormData();
-      fd.append('file', file);
+      setProgress(0);
       try {
-        const r = await fetch(api('/api/chat/upload'), { method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }, body: fd });
-        if (!r.ok) throw new Error(await r.text());
-        const d = await r.json();
+        const d = await uploadWithProgress(file);
         attachmentUrl = d.url;
         attachmentType = d.type;
-      } catch (err) { console.error('Upload failed', err); }
+      } catch (err) {
+        console.error('Upload failed', err);
+        setUploading(false);
+        return; // keep the staged file so the user can retry
+      }
       setUploading(false);
-      setFile(null);
+      clearFile();
     }
     await fetch(api('/api/chat/send'), { method: 'POST', headers: authH(), body: JSON.stringify({ content: input, channel, attachmentUrl, attachmentType, replyToId: replyTo?.id ?? null }) });
     setInput('');
@@ -493,15 +532,33 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
           ) : (
             <>
               {file && (
-                <div className="px-3 py-2 rounded-lg bg-surface-2 border border-accent-soft flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm text-accent-text"><FileText className="w-4 h-4" /> {file.name}</div>
-                  <button onClick={() => setFile(null)} className="text-danger text-xs hover:underline">Remove</button>
+                <div className="relative inline-flex items-center gap-3 p-2 pr-2.5 rounded-xl bg-surface-2 border border-border max-w-full overflow-hidden">
+                  {filePreview ? (
+                    <img src={filePreview} alt="" className="w-12 h-12 rounded-lg object-cover flex-none" />
+                  ) : (
+                    <span className="w-12 h-12 rounded-lg bg-surface-3 grid place-items-center text-t2 flex-none"><FileText className="w-5 h-5" /></span>
+                  )}
+                  <div className="min-w-0">
+                    <div className="text-[13px] font-medium text-t1 truncate max-w-[220px]">{file.name}</div>
+                    <div className="text-[11.5px] text-t3">{formatBytes(file.size)}</div>
+                  </div>
+                  {!uploading && (
+                    <button type="button" onClick={clearFile} aria-label="Remove attachment" className="icon-btn w-6 h-6 border-0 ml-1"><X className="w-3.5 h-3.5" /></button>
+                  )}
+                  {uploading && (
+                    <div className="absolute inset-0 rounded-xl flex flex-col items-center justify-center gap-1.5" style={{ background: 'color-mix(in srgb, var(--bg) 72%, transparent)' }}>
+                      <div className="text-[12px] font-semibold text-t1">{progress}%</div>
+                      <div className="w-3/4 h-1 rounded-full bg-surface-3 overflow-hidden">
+                        <div className="h-full bg-accent transition-[width] duration-150" style={{ width: `${progress}%` }} />
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               <form onSubmit={send} className="flex items-center gap-1.5 rounded-[14px] border border-border-strong bg-surface-2 p-1.5">
                 <label className="icon-btn w-[34px] h-[34px] border-0 cursor-pointer">
                   <Paperclip className="w-[18px] h-[18px]" />
-                  <input type="file" className="hidden" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+                  <input type="file" className="hidden" onChange={(e) => pickFile(e.target.files?.[0] || null)} />
                 </label>
                 <textarea ref={taRef} rows={1} value={input} onChange={(e) => { setInput(e.target.value); autoGrow(); notifyTyping(); }} onKeyDown={onComposerKey} placeholder={`Message ${isChannel ? '#' + channel : headerTitle}`} className="scroll flex-1 min-w-0 bg-transparent border-0 outline-none resize-none text-[14.5px] leading-relaxed text-t1 px-1 py-2 max-h-[140px]" />
                 <button type="submit" disabled={(!input.trim() && !file) || uploading} aria-label="Send" className="btn-accent w-[34px] h-[34px] rounded-[10px] flex-none">
