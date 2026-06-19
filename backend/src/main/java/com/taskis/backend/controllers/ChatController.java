@@ -182,6 +182,27 @@ public class ChatController {
         return ResponseEntity.badRequest().body("avatarUrl required");
     }
 
+    @PutMapping("/profile")
+    public ResponseEntity<?> updateProfile(
+            @org.springframework.web.bind.annotation.RequestBody Map<String, String> body, Principal principal) {
+        if (principal == null)
+            return ResponseEntity.status(401).body("Unauthorized");
+        User user = userRepository.findByUsername(principal.getName()).orElse(null);
+        if (user == null)
+            return ResponseEntity.status(401).body("User not found");
+
+        if (body.containsKey("displayName")) {
+            String dn = body.get("displayName");
+            user.setDisplayName(dn != null && !dn.trim().isEmpty() ? dn.trim() : null);
+        }
+        if (body.containsKey("bio")) {
+            String b = body.get("bio");
+            user.setBio(b != null ? b.trim() : null);
+        }
+        userRepository.save(user);
+        return ResponseEntity.ok(user);
+    }
+
     @GetMapping("/channels/latest")
     public ResponseEntity<Map<String, Date>> getLatestTimestamps() {
         List<Object[]> results = messageRepository.findLatestTimestamps();

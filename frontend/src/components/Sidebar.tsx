@@ -5,7 +5,12 @@ import { Hash, Lock, Shield, LogOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import ThemeToggle from './ThemeToggle';
 import SettingsMenu from './SettingsMenu';
+import ProfileModal from './ProfileModal';
 import { disconnectWs } from '@/lib/ws';
+
+export function displayOf(u: any) {
+  return (u?.displayName && u.displayName.trim()) || u?.username || '?';
+}
 
 interface SidebarProps {
   user: any;
@@ -38,7 +43,7 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
   const channels = ['general', 'intel', 'alerts', 'confidential'];
   const [operatives, setOperatives] = React.useState<any[]>([]);
   const [unread, setUnread] = React.useState<Record<string, boolean>>({});
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [showProfile, setShowProfile] = React.useState(false);
 
   const api = (p: string) => `http://${window.location.hostname}:8080${p}`;
 
@@ -77,36 +82,6 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
     const int = setInterval(fetchData, 5000);
     return () => clearInterval(int);
   }, [user.username, activeChannel]);
-
-  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const formData = new FormData();
-    formData.append('file', file);
-    try {
-      const uploadRes = await fetch(api('/api/chat/upload'), {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-        body: formData,
-      });
-      if (!uploadRes.ok) throw new Error('Upload failed: ' + uploadRes.status);
-      const uploadData = await uploadRes.json();
-      const res = await fetch(api('/api/chat/avatar'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
-        body: JSON.stringify({ avatarUrl: uploadData.url }),
-      });
-      if (res.ok) {
-        const updatedUser = await res.json();
-        localStorage.setItem('user', JSON.stringify(updatedUser));
-        window.location.reload();
-      } else {
-        alert(await res.text());
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
 
   const handleLogout = () => {
     disconnectWs();
@@ -180,7 +155,7 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
                 {src ? <img src={src} alt="" className="w-full h-full rounded-full object-cover" /> : initials(op.username)}
                 <span className="absolute -right-px -bottom-px w-[9px] h-[9px] rounded-full" style={{ background: presenceColor(op.status), border: '2px solid var(--surface-1)' }} />
               </span>
-              <span className="flex-1 text-sm font-medium truncate">{op.username}</span>
+              <span className="flex-1 text-sm font-medium truncate">{displayOf(op)}</span>
               {unread[channelId] && <span className="bg-accent text-on-accent text-[11px] font-semibold px-1.5 py-px rounded-full">New</span>}
             </button>
           );
@@ -190,22 +165,21 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
       {/* user card */}
       <div className="border-t border-border px-3 py-[11px]">
         <div className="flex items-center gap-2.5">
-          <input type="file" className="hidden" ref={fileInputRef} onChange={handleAvatarChange} accept="image/*" />
           <button
-            onClick={() => fileInputRef.current?.click()}
-            title="Change profile picture"
+            onClick={() => setShowProfile(true)}
+            title="Edit profile"
             className="relative w-8 h-8 rounded-full grid place-items-center flex-none text-xs font-semibold text-white hover:opacity-80 transition-opacity"
             style={{ background: avatarSrc(user) ? 'transparent' : toneFor(user.username) }}
           >
             {avatarSrc(user) ? <img src={avatarSrc(user)!} alt="" className="w-full h-full rounded-full object-cover" /> : initials(user.username)}
           </button>
-          <div className="flex-1 min-w-0">
-            <div className="text-[13.5px] font-semibold text-t1 truncate">{user.username}</div>
+          <button onClick={() => setShowProfile(true)} className="flex-1 min-w-0 text-left">
+            <div className="text-[13.5px] font-semibold text-t1 truncate">{displayOf(user)}</div>
             <div className="flex items-center gap-1.5 text-[11.5px] text-t3">
               <span className="w-[7px] h-[7px] rounded-full" style={{ background: 'var(--online)' }} />
               Online
             </div>
-          </div>
+          </button>
           <SettingsMenu />
           <ThemeToggle />
         </div>
@@ -220,6 +194,8 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
           </button>
         </div>
       </div>
+
+      {showProfile && <ProfileModal user={user} onClose={() => setShowProfile(false)} />}
     </aside>
   );
 }

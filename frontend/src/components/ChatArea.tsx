@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Send, Paperclip, FileText, Download, Lock, Menu, X, AlertCircle, MessageSquare, MoreVertical, Reply, Pencil, Trash2, SmilePlus, CheckCheck, Search, Pin, Bookmark, BookmarkCheck, Mic, Square } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { initials, toneFor } from './Sidebar';
+import { initials, toneFor, displayOf } from './Sidebar';
 import { subscribe, publish } from '@/lib/ws';
 
 interface ChatAreaProps { user: any; channel: string; onToggleSidebar: () => void; }
@@ -677,7 +677,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                     {/* meta */}
                     {!grouped && (
                       <div className={`flex items-baseline gap-2 mb-1 ${isMe ? 'flex-row-reverse' : ''}`}>
-                        <span className="text-[13px] font-semibold text-t1">{isMe ? 'You' : msg.sender?.username}</span>
+                        <span className="text-[13px] font-semibold text-t1">{isMe ? 'You' : displayOf(msg.sender)}</span>
                         <span className="text-[11px] text-t3">{fmt(msg.timestamp)}</span>
                         {msg.edited && !isDeleted && <span className="text-[11px] text-t3 italic">edited</span>}
                         {msg.pinned && <Pin className="w-[11px] h-[11px] text-accent-text" />}
@@ -693,7 +693,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                         style={{ borderColor: 'var(--accent-line)', background: 'var(--surface-2)' }}
                       >
                         <Reply className="w-3 h-3 flex-none text-accent-text" />
-                        <span className="font-semibold text-accent-text">{msg.replyTo.sender?.username}</span>
+                        <span className="font-semibold text-accent-text">{displayOf(msg.replyTo.sender)}</span>
                         <span className="truncate opacity-80">{msg.replyTo.content || 'Attachment'}</span>
                       </button>
                     )}
