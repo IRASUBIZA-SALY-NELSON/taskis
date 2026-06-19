@@ -5,9 +5,11 @@ import { useRouter } from 'next/navigation';
 import { ChevronLeft, Plus, Copy, Check, RefreshCw, Power, Trash2, KeyRound } from 'lucide-react';
 import ThemeToggle from '../../components/ThemeToggle';
 import { initials, toneFor } from '../../components/Sidebar';
+import { useToast } from '../../components/Toast';
 
 export default function AdminDashboard() {
   const router = useRouter();
+  const { confirm, toast } = useToast();
   const [users, setUsers] = useState<any[]>([]);
   const [keys, setKeys] = useState<any[]>([]);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -44,15 +46,17 @@ export default function AdminDashboard() {
   };
 
   const removeUser = async (id: number, name: string) => {
-    if (!confirm(`Remove ${name}? This deletes the account and revokes their key.`)) return;
+    if (!(await confirm({ title: `Remove ${name}?`, body: 'This deletes the account and revokes their key.', confirmText: 'Remove', danger: true }))) return;
     await fetch(api(`/api/admin/users/${id}`), { method: 'DELETE', headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
     fetchData();
+    toast(`${name} removed`, 'success');
   };
 
   const revokeKey = async (keyId: number, name: string) => {
-    if (!confirm(`Revoke ${name}'s access key? They won't be able to register with it.`)) return;
+    if (!(await confirm({ title: `Revoke ${name}'s key?`, body: "They won't be able to register with it.", confirmText: 'Revoke', danger: true }))) return;
     await fetch(api(`/api/admin/keys/${keyId}/revoke`), { method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
     fetchData();
+    toast('Key revoked', 'success');
   };
 
   const generateKey = async (username: string) => {
@@ -64,8 +68,8 @@ export default function AdminDashboard() {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ username }),
       });
-      if (res.ok) { setNewUsername(''); fetchData(); } else { alert(await res.text()); }
-    } catch (e) { console.error(e); }
+      if (res.ok) { setNewUsername(''); fetchData(); toast('Key generated', 'success'); } else { toast((await res.text()) || 'Failed', 'error'); }
+    } catch (e) { toast('Network error', 'error'); }
     setLoading(false);
   };
 
@@ -89,6 +93,7 @@ export default function AdminDashboard() {
     } catch (err) { console.error('Failed to copy:', err); }
     if (success) {
       setCopiedKey(keyString);
+      toast('Access key copied', 'success');
       setTimeout(() => setCopiedKey(null), 2000);
     } else {
       window.prompt('Copy the key below (Ctrl+C):', keyString);
@@ -182,7 +187,7 @@ export default function AdminDashboard() {
                 <button onClick={() => copyToClipboard(u.registrationKey)} disabled={!u.registrationKey} className="icon-btn w-[30px] h-[30px] border-0 disabled:opacity-40" title="Copy key">
                   {copiedKey === u.registrationKey ? <Check className="w-[15px] h-[15px] text-online" /> : <Copy className="w-[15px] h-[15px]" />}
                 </button>
-                <button onClick={() => { if (confirm(`Regenerate access key for ${u.username}? This replaces the previous key.`)) generateKey(u.username); }} className="icon-btn w-[30px] h-[30px] border-0" title="Regenerate key">
+                <button onClick={async () => { if (await confirm({ title: `Regenerate key for ${u.username}?`, body: 'This replaces their previous key.', confirmText: 'Regenerate' })) generateKey(u.username); }} className="icon-btn w-[30px] h-[30px] border-0" title="Regenerate key">
                   <RefreshCw className="w-[15px] h-[15px]" />
                 </button>
                 {!isAdmin && k && !k.revoked && (

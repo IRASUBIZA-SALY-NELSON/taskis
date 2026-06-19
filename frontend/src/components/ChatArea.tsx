@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { initials, toneFor, displayOf } from './Sidebar';
 import { subscribe, publish } from '@/lib/ws';
 import EmojiGifPicker from './EmojiGifPicker';
+import { useToast } from './Toast';
 
 interface ChatAreaProps { user: any; channel: string; onToggleSidebar: () => void; }
 
@@ -14,6 +15,7 @@ const api = (path: string) => `http://${typeof window !== 'undefined' ? window.l
 const authH = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' });
 
 export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaProps) {
+  const { confirm, toast } = useToast();
   const [messages, setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [input, setInput] = useState('');
@@ -55,9 +57,9 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   const taRef = useRef<HTMLTextAreaElement>(null);
   const nearBottomRef = useRef(true);
   const prevLenRef = useRef(0);
-  const unreadRef = useRef(0);
   const lastTyping = useRef(0);
   const boundaryRef = useRef(0);
+  const nextTemp = useRef(0);
   const typingTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const isBot = channel === 'taskis-bot';
@@ -70,13 +72,10 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     fetch(api(`/api/chat/messages/${channel}`), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
       .then((r) => r.json()).then(setMessages).catch(() => {});
 
-  // Roster (for @mention autocomplete + notifications) and notification permission.
+  // Roster for @mention autocomplete. (Notifications are handled globally by NotificationManager.)
   useEffect(() => {
     fetch(api('/api/chat/users'), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
       .then((r) => r.json()).then((d) => Array.isArray(d) && setMembers(d)).catch(() => {});
-    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
-      Notification.requestPermission().catch(() => {});
-    }
   }, []);
 
   const savedKey = `saved_${user.username}`;
@@ -134,34 +133,6 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     } catch { /* noop */ }
   };
 
-  const playPing = () => {
-    try {
-      const Ctx = (window.AudioContext || (window as any).webkitAudioContext);
-      if (!Ctx) return;
-      const ctx = new Ctx();
-      const o = ctx.createOscillator();
-      const g = ctx.createGain();
-      o.connect(g); g.connect(ctx.destination);
-      o.frequency.value = 660;
-      g.gain.setValueAtTime(0.0001, ctx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.07, ctx.currentTime + 0.01);
-      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.25);
-      o.start();
-      o.stop(ctx.currentTime + 0.26);
-    } catch { /* noop */ }
-  };
-
-  const notify = (title: string, body: string) => {
-    try {
-      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-        new Notification(title, { body: body.slice(0, 140) });
-      }
-    } catch { /* noop */ }
-  };
-
-  const mentionsMe = (text: string) =>
-    !!text && new RegExp(`(^|\\s)@${user.username}\\b`, 'i').test(text);
-
   useEffect(() => {
     setLoading(true);
     setMessages([]);
@@ -169,7 +140,6 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     setTypingUsers([]);
     nearBottomRef.current = true;
     prevLenRef.current = 0;
-    unreadRef.current = 0;
     try {
       const seen = JSON.parse(localStorage.getItem('seenAt') || '{}');
       boundaryRef.current = seen[channel] || 0;
@@ -186,19 +156,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
       setMessages((prev) => {
         const i = prev.findIndex((m) => m.id === incoming.id);
         if (i === -1) {
-          const fromOther = incoming.sender?.username && incoming.sender.username !== user.username;
-          const mentioned = fromOther && mentionsMe(incoming.content || '');
-          if (fromOther) {
-            if (document.hidden) {
-              unreadRef.current += 1;
-              document.title = `(${unreadRef.current}) Taskis`;
-              notify(`${incoming.sender.username}${mentioned ? ' mentioned you' : ''}`, incoming.content || 'Sent an attachment');
-              playPing();
-            } else {
-              markChannelSeen();
-              if (mentioned) playPing();
-            }
-          }
+          if (incoming.sender?.username !== user.username && !document.hidden) markChannelSeen();
           return [...prev, incoming];
         }
         const copy = prev.slice();
@@ -215,9 +173,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
         setTypingUsers((prev) => prev.filter((u) => u !== e.username));
       }, 3500);
     });
-    const onFocus = () => { unreadRef.current = 0; document.title = 'Taskis'; };
-    window.addEventListener('focus', onFocus);
-    return () => { offMsg(); offTyping(); window.removeEventListener('focus', onFocus); };
+    return () => { offMsg(); offTyping(); };
   }, [channel, user.username]);
 
   useEffect(() => {
@@ -341,11 +297,34 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
       xhr.send(fd);
     });
 
+  const deliver = async (payload: any, tempId: string) => {
+    try {
+      const r = await fetch(api('/api/chat/send'), { method: 'POST', headers: authH(), body: JSON.stringify(payload) });
+      if (!r.ok) throw new Error();
+      const saved = await r.json();
+      setMessages((prev) => {
+        const exists = prev.some((m) => m.id === saved.id);
+        return prev.flatMap((m) => (m.id === tempId ? (exists ? [] : [saved]) : [m]));
+      });
+    } catch {
+      setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, _sending: false, _failed: true } : m)));
+      toast('Message failed to send', 'error');
+    }
+  };
+
+  const retrySend = (m: any) => {
+    setMessages((prev) => prev.map((x) => (x.id === m.id ? { ...x, _sending: true, _failed: false } : x)));
+    deliver({ content: m.content, channel, attachmentUrl: m.attachmentUrl, attachmentType: m.attachmentType, replyToId: m.replyTo?.id ?? null }, m.id);
+  };
+
   const send = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() && !file) return;
-    let attachmentUrl = null;
-    let attachmentType = null;
+    const text = input;
+    const replySnapshot = replyTo;
+
+    let attachmentUrl: string | null = null;
+    let attachmentType: string | null = null;
     if (file) {
       setUploading(true);
       setProgress(0);
@@ -353,20 +332,29 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
         const d = await uploadWithProgress(file);
         attachmentUrl = d.url;
         attachmentType = d.type;
-      } catch (err) {
-        console.error('Upload failed', err);
+      } catch {
+        toast('Upload failed — try again', 'error');
         setUploading(false);
         return; // keep the staged file so the user can retry
       }
       setUploading(false);
       clearFile();
     }
-    await fetch(api('/api/chat/send'), { method: 'POST', headers: authH(), body: JSON.stringify({ content: input, channel, attachmentUrl, attachmentType, replyToId: replyTo?.id ?? null }) });
+
+    // Optimistic: show the message instantly, reconcile with the server copy.
+    const tempId = `temp-${nextTemp.current++}`;
+    const optimistic = {
+      id: tempId, sender: user, content: text, channel,
+      attachmentUrl, attachmentType, replyTo: replySnapshot,
+      timestamp: new Date().toISOString(), _sending: true,
+    };
+    setMessages((prev) => [...prev, optimistic]);
     setInput('');
     setReplyTo(null);
     nearBottomRef.current = true;
     if (taRef.current) taRef.current.style.height = 'auto';
-    fetchMsgs();
+
+    deliver({ content: text, channel, attachmentUrl, attachmentType, replyToId: replySnapshot?.id ?? null }, tempId);
   };
 
   const react = async (msgId: number, emoji: string) => {
@@ -377,7 +365,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
 
   const deleteMsg = async (id: number) => {
     setMenuId(null);
-    if (!confirm('Delete this message?')) return;
+    if (!(await confirm({ title: 'Delete message?', body: 'This removes it for everyone in the conversation.', confirmText: 'Delete', danger: true }))) return;
     await fetch(api(`/api/chat/messages/${id}`), { method: 'DELETE', headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
     fetchMsgs();
   };
@@ -387,7 +375,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   const submitEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     const r = await fetch(api(`/api/chat/messages/${editMsg.id}`), { method: 'PUT', headers: authH(), body: JSON.stringify({ content: editVal }) });
-    if (!r.ok) { alert(await r.text()); return; }
+    if (!r.ok) { toast((await r.text()) || 'Could not edit', 'error'); return; }
     setEditMsg(null);
     fetchMsgs();
   };
@@ -778,11 +766,19 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                       </div>
                     )}
 
-                    {/* read receipt (own) */}
+                    {/* delivery / read receipt (own) */}
                     {isMe && !isDeleted && (
-                      <div className="flex items-center gap-1 mt-1 text-[10.5px] text-t3">
-                        <CheckCheck className="w-3 h-3" style={readByOthers(msg) ? { color: 'var(--accent-text)' } : undefined} />
-                        {readByOthers(msg) ? 'Seen' : 'Sent'}
+                      <div className="flex items-center gap-1 mt-1 text-[10.5px]">
+                        {msg._sending ? (
+                          <span className="text-t3 italic">Sending…</span>
+                        ) : msg._failed ? (
+                          <button onClick={() => retrySend(msg)} className="text-danger hover:underline">Failed · retry</button>
+                        ) : (
+                          <span className="flex items-center gap-1 text-t3">
+                            <CheckCheck className="w-3 h-3" style={readByOthers(msg) ? { color: 'var(--accent-text)' } : undefined} />
+                            {readByOthers(msg) ? 'Seen' : 'Sent'}
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>

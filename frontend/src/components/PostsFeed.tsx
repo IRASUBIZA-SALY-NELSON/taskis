@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { initials, toneFor, displayOf } from './Sidebar';
 import { subscribe } from '@/lib/ws';
 import EmojiGifPicker from './EmojiGifPicker';
+import { useToast } from './Toast';
 
 const api = (p: string) => `http://${window.location.hostname}:8080${p}`;
 const token = () => localStorage.getItem('token');
@@ -218,6 +219,7 @@ function PostCard({ post, user, now, onChange, onDelete, onZoom }: { post: any; 
 }
 
 export default function PostsFeed({ user }: { user: any }) {
+  const { confirm, toast } = useToast();
   const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [caption, setCaption] = useState('');
@@ -288,14 +290,15 @@ export default function PostsFeed({ user }: { user: any }) {
         setCaption('');
         pickFile(null);
         setGifUrl(null);
-      } else alert(await r.text());
-    } catch (err) { console.error(err); }
+        toast('Posted', 'success');
+      } else toast((await r.text()) || 'Could not post', 'error');
+    } catch (err) { toast('Network error', 'error'); }
     setPosting(false);
   };
 
   const onChange = (updated: any) => setPosts((prev) => prev.map((p) => (p.id === updated.id ? { ...p, ...normalize(updated) } : p)));
   const onDelete = async (id: number) => {
-    if (!confirm('Delete this post?')) return;
+    if (!(await confirm({ title: 'Delete post?', body: 'This removes the post for everyone.', confirmText: 'Delete', danger: true }))) return;
     await fetch(api(`/api/posts/${id}`), { method: 'DELETE', headers: { Authorization: `Bearer ${token()}` } });
     setPosts((prev) => prev.filter((p) => p.id !== id));
   };
