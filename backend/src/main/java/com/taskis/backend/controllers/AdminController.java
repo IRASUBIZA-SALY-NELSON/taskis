@@ -30,7 +30,7 @@ public class AdminController {
         if (principal instanceof UserDetails) {
             String username = ((UserDetails) principal).getUsername();
             User user = userRepository.findByUsername(username).orElse(null);
-            return user != null && ("ADMIN".equals(user.getRole()) || "nelson".equalsIgnoreCase(user.getUsername()));
+            return user != null && "ADMIN".equals(user.getRole());
         }
         return false;
     }
