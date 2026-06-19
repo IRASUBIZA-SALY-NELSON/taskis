@@ -33,10 +33,10 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `
               try {
-                if (localStorage.theme === 'light') {
-                  document.documentElement.classList.add('light');
-                } else {
+                if (localStorage.theme === 'dark') {
                   document.documentElement.classList.remove('light');
+                } else {
+                  document.documentElement.classList.add('light');
                 }
                 var fs = localStorage.fontStack;
                 if (fs) document.documentElement.style.setProperty('--font-user', fs);

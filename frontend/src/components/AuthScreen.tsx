@@ -149,11 +149,11 @@ export default function AuthScreen() {
           <i style={{ width: 7, height: 7 }} />
           <b style={{ width: 2.5, height: 5 }} />
         </span>
-        <span className="text-[19px] font-semibold tracking-[-0.02em] text-t1">Taskis</span>
+        <span className="serif text-[21px] font-semibold text-t1">Taskis</span>
       </div>
 
       <div className="eyebrow text-center mb-2.5">{c.eyebrow}</div>
-      <h1 className="text-center text-[21px] font-semibold tracking-[-0.01em] text-t1 mb-[7px]">{c.title}</h1>
+      <h1 className="serif text-center text-[23px] font-semibold text-t1 mb-[7px]">{c.title}</h1>
       <p className="text-center text-[13.5px] leading-[1.55] text-t2 mx-auto mb-6 max-w-[300px]">{c.subtitle(username)}</p>
 
       <AnimatePresence mode="wait">
