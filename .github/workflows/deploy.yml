@@ -29,3 +29,6 @@ jobs:
 
                   echo "Restart backend..."
                   sudo systemctl restart taskis
+
+                  echo "Restart frontend..."
+                  sudo systemctl restart taskis-frontend || pm2 restart taskis-frontend || pm2 restart all || true

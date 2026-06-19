@@ -1,5 +1,4 @@
 package com.taskis.backend.controllers;
-
 import com.taskis.backend.models.Message;
 import com.taskis.backend.models.User;
 import com.taskis.backend.repositories.MessageRepository;
@@ -9,6 +8,8 @@ import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
@@ -47,7 +48,7 @@ public class ChatController {
         User sender = userRepository.findByUsername(principal.getName()).orElse(null);
         if (sender == null)
             return;
-        
+
         if ("taskis-bot".equals(messageDto.getChannel()) && !"Taskis Bot".equals(sender.getUsername())) {
             return; // Ignore message
         }
@@ -168,12 +169,12 @@ public class ChatController {
         message.setAttachmentUrl(messageDto.getAttachmentUrl());
         message.setAttachmentType(messageDto.getAttachmentType());
         message.setTimestamp(new Date());
+        if (messageDto.getReplyToId() != null) {
+            messageRepository.findById(messageDto.getReplyToId()).ifPresent(message::setReplyTo);
+        }
 
         Message savedMessage = messageRepository.save(message);
-
-        // Notify via websocket just in case
         messagingTemplate.convertAndSend("/topic/" + message.getChannel(), savedMessage);
-
         return ResponseEntity.ok(savedMessage);
     }
 
@@ -211,23 +212,120 @@ public class ChatController {
         return ResponseEntity.ok().build();
     }
 
-    @org.springframework.beans.factory.annotation.Value("${taskis.upload-dir:./uploads/}")
-    private String uploadDir;
+    @PostMapping("/messages/{id}/react")
+    public ResponseEntity<?> reactToMessage(@PathVariable Long id, @org.springframework.web.bind.annotation.RequestBody Map<String, String> body, Principal principal) {
+        if (principal == null) return ResponseEntity.status(401).body("Unauthorized");
+        Message msg = messageRepository.findById(id).orElse(null);
+        if (msg == null) return ResponseEntity.notFound().build();
+
+        String emoji = body.get("emoji");
+        String username = principal.getName();
+        if (emoji == null || emoji.isBlank()) return ResponseEntity.badRequest().body("emoji required");
+
+        try {
+            // reactions stored as "emoji1:user1,user2;emoji2:user3"
+            String raw = msg.getReactions() == null || msg.getReactions().isBlank() ? "" : msg.getReactions();
+            java.util.Map<String, java.util.List<String>> reactions = new java.util.LinkedHashMap<>();
+            if (!raw.isBlank()) {
+                for (String part : raw.split(";")) {
+                    if (part.contains(":")) {
+                        String[] kv = part.split(":", 2);
+                        java.util.List<String> users = new java.util.ArrayList<>(java.util.Arrays.asList(kv[1].split(",")));
+                        users.removeIf(String::isBlank);
+                        reactions.put(kv[0], users);
+                    }
+                }
+            }
+            reactions.computeIfAbsent(emoji, k -> new java.util.ArrayList<>());
+            if (reactions.get(emoji).contains(username)) {
+                reactions.get(emoji).remove(username);
+                if (reactions.get(emoji).isEmpty()) reactions.remove(emoji);
+            } else {
+                reactions.get(emoji).add(username);
+            }
+            StringBuilder sb = new StringBuilder();
+            for (java.util.Map.Entry<String, java.util.List<String>> e : reactions.entrySet()) {
+                if (sb.length() > 0) sb.append(";");
+                sb.append(e.getKey()).append(":").append(String.join(",", e.getValue()));
+            }
+            msg.setReactions(sb.toString());
+            messageRepository.save(msg);
+            messagingTemplate.convertAndSend("/topic/" + msg.getChannel(), msg);
+            return ResponseEntity.ok(msg);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Error: " + e.getMessage());
+        }
+    }
+
+    @DeleteMapping("/messages/{id}")
+    public ResponseEntity<?> deleteMessage(@PathVariable Long id, Principal principal) {
+        if (principal == null) return ResponseEntity.status(401).body("Unauthorized");
+        Message msg = messageRepository.findById(id).orElse(null);
+        if (msg == null) return ResponseEntity.notFound().build();
+        User user = userRepository.findByUsername(principal.getName()).orElse(null);
+        if (user == null) return ResponseEntity.status(401).body("Unauthorized");
+
+        boolean isAdmin = "ADMIN".equals(user.getRole()) || "nelson".equalsIgnoreCase(user.getUsername());
+        if (!msg.getSender().getUsername().equals(principal.getName()) && !isAdmin)
+            return ResponseEntity.status(403).body("Forbidden");
+
+        msg.setDeleted(true);
+        msg.setContent("[deleted]");
+        messageRepository.save(msg);
+        messagingTemplate.convertAndSend("/topic/" + msg.getChannel(), msg);
+        return ResponseEntity.ok().build();
+    }
+
+    @PutMapping("/messages/{id}")
+    public ResponseEntity<?> editMessage(@PathVariable Long id, @org.springframework.web.bind.annotation.RequestBody Map<String, String> body, Principal principal) {
+        if (principal == null) return ResponseEntity.status(401).body("Unauthorized");
+        Message msg = messageRepository.findById(id).orElse(null);
+        if (msg == null) return ResponseEntity.notFound().build();
+   if (!msg.getSender().getUsername().equals(principal.getName()))
+            return ResponseEntity.status(403).body("Forbidden");
+
+        // Only allow edit if no one else has read it
+        String readBy = msg.getReadBy() == null ? "" : msg.getReadBy();
+        boolean readByOthers = java.util.Arrays.stream(readBy.split(","))
+            .map(String::trim).filter(s -> !s.isEmpty())
+            .anyMatch(u -> !u.equals(principal.getName()));
+        if (readByOthers)
+            return ResponseEntity.status(403).body("Cannot edit: message already read");
+
+    String newContent = body.get("content");
+        if (newContent == null || newContent.isBlank()) return ResponseEntity.badRequest().body("content required");
+        msg.setContent(newContent);
+        msg.setEdited(true);
+        messageRepository.save(msg);
+        messagingTemplate.convertAndSend("/topic/" + msg.getChannel(), msg);
+        return ResponseEntity.ok(msg);
+    }
+
+    @PostMapping("/messages/{id}/read")
+    public ResponseEntity<?> markRead(@PathVariable Long id, Principal principal) {
+    if (principal == null) return ResponseEntity.status(401).body("Unauthorized");
+        Message msg = messageRepository.findById(id).orElse(null);
+        if (msg == null) return ResponseEntity.notFound().build();
+        String username = principal.getName();
+        String readBy = msg.getReadBy() == null ? "" : msg.getReadBy();
+        if (!java.util.Arrays.asList(readBy.split(",")).contains(username)) {
+            msg.setReadBy(readBy.isBlank() ? username : readBy + "," + username);
+            messageRepository.save(msg);
+        }
+        return ResponseEntity.ok().build();
+    }
 
     @PostMapping("/upload")
     public ResponseEntity<?> uploadFile(@RequestParam("file") MultipartFile file) {
         try {
-            Path uploadPath = Paths.get(uploadDir).toAbsolutePath().normalize();
-            Files.createDirectories(uploadPath);
+            String uploadDir = System.getProperty("user.dir") + "/uploads/";
+            Files.createDirectories(Paths.get(uploadDir));
 
-            String original = file.getOriginalFilename() == null ? "file" : file.getOriginalFilename();
-            String safeName = original.replaceAll("[\\\\/]", "_");
-            String fileName = UUID.randomUUID().toString() + "_" + safeName;
-            Path filePath = uploadPath.resolve(fileName);
+            String fileName = UUID.randomUUID().toString() + "_" + file.getOriginalFilename();
+            Path filePath = Paths.get(uploadDir + fileName);
             Files.copy(file.getInputStream(), filePath);
 
-            return ResponseEntity.ok(Map.of("url", "/uploads/" + fileName, "type",
-                    file.getContentType() == null ? "application/octet-stream" : file.getContentType()));
+            return ResponseEntity.ok(Map.of("url", "/uploads/" + fileName, "type", file.getContentType()));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body("Could not upload file: " + e.getMessage());
         }
@@ -239,37 +337,16 @@ class MessageDto {
     private String channel;
     private String attachmentUrl;
     private String attachmentType;
+    private Long replyToId;
 
-    // Getters and Setters
-    public String getContent() {
-        return content;
-    }
-
-    public void setContent(String content) {
-        this.content = content;
-    }
-
-    public String getChannel() {
-        return channel;
-    }
-
-    public void setChannel(String channel) {
-        this.channel = channel;
-    }
-
-    public String getAttachmentUrl() {
-        return attachmentUrl;
-    }
-
-    public void setAttachmentUrl(String attachmentUrl) {
-        this.attachmentUrl = attachmentUrl;
-    }
-
-    public String getAttachmentType() {
-        return attachmentType;
-    }
-
-    public void setAttachmentType(String attachmentType) {
-        this.attachmentType = attachmentType;
-    }
+    public String getContent() { return content; }
+    public void setContent(String content) { this.content = content; }
+    public String getChannel() { return channel; }
+    public void setChannel(String channel) { this.channel = channel; }
+    public String getAttachmentUrl() { return attachmentUrl; }
+    public void setAttachmentUrl(String attachmentUrl) { this.attachmentUrl = attachmentUrl; }
+    public String getAttachmentType() { return attachmentType; }
+    public void setAttachmentType(String attachmentType) { this.attachmentType = attachmentType; }
+    public Long getReplyToId() { return replyToId; }
+    public void setReplyToId(Long replyToId) { this.replyToId = replyToId; }
 }
