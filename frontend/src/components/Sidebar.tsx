@@ -117,7 +117,7 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
           <i style={{ width: 6, height: 6 }} />
           <b style={{ width: 2, height: 4 }} />
         </span>
-        <span className="flex-1 text-[15px] font-semibold tracking-[-0.01em] text-t1">Taskis</span>
+        <span className="serif flex-1 text-[17px] font-semibold text-t1">Taskis</span>
         <Lock className="w-[11px] h-[11px] text-t3" />
       </div>
 

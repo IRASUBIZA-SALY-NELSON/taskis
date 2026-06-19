@@ -1,12 +1,8 @@
 'use client';
 
+import './global-shim'; // MUST be first — defines window.global before sockjs-client loads
 import { Client, type IMessage } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
-
-// sockjs-client expects a `global` reference in some bundlers.
-if (typeof window !== 'undefined' && !(window as any).global) {
-  (window as any).global = window;
-}
 
 type Handler = (body: any) => void;
 

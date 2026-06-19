@@ -7,92 +7,89 @@
    ============================================================ */
 
 :root {
-  /* surfaces */
-  --bg: #0c0c0d;
-  --surface-1: #151514;
-  --surface-2: #1b1a18;
-  --surface-3: #242220;
-  --hover: rgba(255, 255, 255, 0.045);
+  /* Anthropic-leaning warm charcoal (dark) */
+  --bg: #21201d;
+  --surface-1: #2a2825;
+  --surface-2: #32302b;
+  --surface-3: #3c3934;
+  --hover: rgba(255, 255, 255, 0.05);
 
-  /* lines */
-  --border: rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(255, 255, 255, 0.14);
+  --border: rgba(255, 255, 255, 0.10);
+  --border-strong: rgba(255, 255, 255, 0.16);
 
-  /* text */
-  --t1: #ededec;
-  --t2: #9b9a95;
-  --t3: #6b6a64;
+  --t1: #edeae3;
+  --t2: #a9a298;
+  --t3: #7a746a;
 
-  /* accent — warm amber, dark ink on top */
-  --accent: #c8852f;
-  --accent-hover: #d79a44;
-  --accent-press: #b3742a;
-  --accent-soft: rgba(200, 133, 47, 0.13);
-  --accent-text: #e0a860;
-  --accent-line: rgba(200, 133, 47, 0.40);
-  --on-accent: #17110a;
+  /* accent — Claude clay / terracotta */
+  --accent: #d97757;
+  --accent-hover: #e08a6c;
+  --accent-press: #c96642;
+  --accent-soft: rgba(217, 119, 87, 0.16);
+  --accent-text: #e9a487;
+  --accent-line: rgba(217, 119, 87, 0.45);
+  --on-accent: #ffffff;
 
-  /* bubbles */
-  --bubble-own: #221f1a;
-  --bubble-other: #1a1917;
+  --bubble-own: #3a302a;
+  --bubble-other: #2a2825;
 
-  /* status */
-  --online: #57b36b;
-  --away: #d2a23f;
-  --danger: #d9645a;
-  --danger-soft: rgba(217, 100, 90, 0.12);
+  --online: #5fae7e;
+  --away: #d3a24a;
+  --danger: #e0695f;
+  --danger-soft: rgba(224, 105, 95, 0.14);
 
-  /* elevation */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
-  --shadow-md: 0 6px 22px rgba(0, 0, 0, 0.40), 0 1px 3px rgba(0, 0, 0, 0.45);
-  --shadow-lg: 0 22px 60px rgba(0, 0, 0, 0.55), 0 2px 10px rgba(0, 0, 0, 0.45);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.40);
+  --shadow-md: 0 6px 22px rgba(0, 0, 0, 0.36), 0 1px 3px rgba(0, 0, 0, 0.40);
+  --shadow-lg: 0 22px 60px rgba(0, 0, 0, 0.50), 0 2px 10px rgba(0, 0, 0, 0.40);
 
-  /* a hairline highlight on the top edge of raised cards (depth) */
-  --edge-hi: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  --edge-hi: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 
-  /* faint accent wash behind the page */
-  --wash: radial-gradient(1100px 520px at 50% -14%, rgba(200, 133, 47, 0.05), transparent 62%);
+  --wash: radial-gradient(1100px 520px at 50% -14%, rgba(217, 119, 87, 0.06), transparent 62%);
+
+  /* warm editorial serif for the wordmark + display headings */
+  --font-serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
 
   color-scheme: dark;
 }
 
 :root.light {
-  --bg: #f3f1ec;
-  --surface-1: #ffffff;
-  --surface-2: #faf8f3;
-  --surface-3: #efebe3;
-  --hover: rgba(30, 26, 18, 0.04);
+  /* Anthropic warm ivory "paper" (light) */
+  --bg: #f4f2ec;
+  --surface-1: #fffefb;
+  --surface-2: #faf8f2;
+  --surface-3: #efece2;
+  --hover: rgba(40, 33, 22, 0.045);
 
-  --border: rgba(30, 26, 18, 0.10);
-  --border-strong: rgba(30, 26, 18, 0.17);
+  --border: rgba(40, 33, 22, 0.11);
+  --border-strong: rgba(40, 33, 22, 0.17);
 
-  --t1: #1b1915;
-  --t2: #5f5b52;
-  --t3: #918c81;
+  --t1: #1d1b15;
+  --t2: #5b554b;
+  --t3: #918a7c;
 
-  --accent: #b0701c;
-  --accent-hover: #9c6219;
-  --accent-press: #875415;
-  --accent-soft: rgba(176, 112, 28, 0.10);
-  --accent-text: #8f5b18;
-  --accent-line: rgba(176, 112, 28, 0.38);
-  --on-accent: #fffdf8;
+  --accent: #c45f3f;
+  --accent-hover: #b15436;
+  --accent-press: #9e4a2f;
+  --accent-soft: rgba(196, 95, 63, 0.10);
+  --accent-text: #b1542f;
+  --accent-line: rgba(196, 95, 63, 0.38);
+  --on-accent: #fffaf5;
 
-  --bubble-own: #f6ecd9;
-  --bubble-other: #ffffff;
+  --bubble-own: #f6e7df;
+  --bubble-other: #fffefb;
 
-  --online: #2f9255;
+  --online: #2f9d5f;
   --away: #b9842a;
   --danger: #c2493f;
   --danger-soft: rgba(194, 73, 63, 0.10);
 
-  --shadow-sm: 0 1px 2px rgba(28, 24, 14, 0.06);
-  --shadow-md: 0 6px 22px rgba(28, 24, 14, 0.08), 0 1px 3px rgba(28, 24, 14, 0.06);
-  --shadow-lg: 0 22px 60px rgba(28, 24, 14, 0.16), 0 2px 10px rgba(28, 24, 14, 0.08);
+  --shadow-sm: 0 1px 2px rgba(40, 33, 22, 0.05);
+  --shadow-md: 0 6px 22px rgba(40, 33, 22, 0.07), 0 1px 3px rgba(40, 33, 22, 0.05);
+  --shadow-lg: 0 22px 60px rgba(40, 33, 22, 0.14), 0 2px 10px rgba(40, 33, 22, 0.07);
 
-  --edge-hi: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  --edge-hi: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 
-  --wash: radial-gradient(1100px 520px at 50% -14%, rgba(176, 112, 28, 0.05), transparent 62%);
+  --wash: radial-gradient(1100px 520px at 50% -14%, rgba(196, 95, 63, 0.06), transparent 62%);
 
   color-scheme: light;
 }
@@ -189,6 +186,11 @@ body {
   letter-spacing: 0.13em;
   text-transform: uppercase;
   color: var(--t3);
+}
+
+.serif {
+  font-family: var(--font-serif);
+  letter-spacing: -0.01em;
 }
 
 .card {

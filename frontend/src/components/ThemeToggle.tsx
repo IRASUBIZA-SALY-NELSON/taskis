@@ -7,7 +7,8 @@ export default function ThemeToggle({ size = 30 }: { size?: number }) {
   const [isLight, setIsLight] = useState(false);
 
   useEffect(() => {
-    setIsLight(localStorage.getItem('theme') === 'light');
+    // Light is the default; only an explicit 'dark' preference is dark.
+    setIsLight(localStorage.getItem('theme') !== 'dark');
   }, []);
 
   const toggleTheme = () => {

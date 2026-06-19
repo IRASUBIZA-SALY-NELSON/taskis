@@ -28,7 +28,13 @@ jobs:
                   ./mvnw clean package -DskipTests
 
                   echo "Restart backend..."
-                  sudo systemctl restart taskis
+                  sudo -n systemctl restart taskis || echo "WARN: backend restart failed — configure passwordless sudo for 'systemctl restart taskis'"
 
                   echo "Restart frontend..."
-                  sudo systemctl restart taskis-frontend || pm2 restart taskis-frontend || pm2 restart all || true
+                  cd /home/plp/taskis/frontend
+                  if pm2 describe taskis-frontend > /dev/null 2>&1; then
+                    pm2 restart taskis-frontend --update-env
+                  else
+                    pm2 start "npm run start" --name taskis-frontend
+                  fi
+                  pm2 save || true
