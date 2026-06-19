@@ -52,7 +52,7 @@ public class AuthController {
     public ResponseEntity<?> access(@RequestBody Map<String, String> body) {
         String token = body.get("token");
         Optional<RegistrationKey> regKeyOpt = keyRepository.findByKeyString(token);
-        if (regKeyOpt.isPresent() && !regKeyOpt.get().getIsUsed()) {
+        if (regKeyOpt.isPresent() && !regKeyOpt.get().getIsUsed() && !Boolean.TRUE.equals(regKeyOpt.get().getRevoked())) {
             User user = userRepository.findAll().stream().filter(u -> token.equals(u.getRegistrationKey())).findFirst().orElse(null);
             Map<String, String> res = new HashMap<>();
             res.put("status", "REQUIRES_PASSPHRASE");
@@ -68,7 +68,7 @@ public class AuthController {
         String passphrase = body.get("passphrase");
 
         Optional<RegistrationKey> regKeyOpt = keyRepository.findByKeyString(token);
-        if (regKeyOpt.isPresent() && !regKeyOpt.get().getIsUsed()) {
+        if (regKeyOpt.isPresent() && !regKeyOpt.get().getIsUsed() && !Boolean.TRUE.equals(regKeyOpt.get().getRevoked())) {
             RegistrationKey rk = regKeyOpt.get();
             rk.setIsUsed(true);
             keyRepository.save(rk);
@@ -94,6 +94,9 @@ public class AuthController {
 
         User user = userRepository.findByUsername(username).orElse(null);
         if (user != null && passwordEncoder.matches(passphrase, user.getPassword())) {
+            if (Boolean.FALSE.equals(user.getActive())) {
+                return ResponseEntity.status(403).body("This account has been deactivated.");
+            }
             return ResponseEntity.ok(generateAuthResponse(user));
         }
         return ResponseEntity.badRequest().body("Invalid credentials");

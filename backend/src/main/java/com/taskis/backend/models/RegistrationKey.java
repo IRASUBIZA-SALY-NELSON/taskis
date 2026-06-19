@@ -17,6 +17,8 @@ public class RegistrationKey {
 
     private Boolean isUsed = false;
 
+    private Boolean revoked = false;
+
     @Temporal(TemporalType.TIMESTAMP)
     private Date createdAt = new Date();
 }

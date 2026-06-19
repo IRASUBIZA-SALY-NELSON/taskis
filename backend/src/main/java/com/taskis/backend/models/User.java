@@ -41,6 +41,8 @@ public class User {
 
     private Boolean pictureChanged = false;
 
+    private Boolean active = true;
+
     private String displayName;
 
     @Column(length = 512)

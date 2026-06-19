@@ -83,4 +83,51 @@ public class AdminController {
             return ResponseEntity.status(403).body("Access denied");
         return ResponseEntity.ok(userRepository.findAll());
     }
+
+    @PostMapping("/users/{id}/active")
+    public ResponseEntity<?> setActive(@PathVariable Long id, @RequestBody java.util.Map<String, Object> body) {
+        if (!isAdmin())
+            return ResponseEntity.status(403).body("Access denied");
+        User user = userRepository.findById(id).orElse(null);
+        if (user == null)
+            return ResponseEntity.notFound().build();
+        if ("ADMIN".equals(user.getRole()))
+            return ResponseEntity.status(403).body("Cannot deactivate an admin");
+        Object v = body.get("active");
+        user.setActive(Boolean.TRUE.equals(v) || "true".equals(String.valueOf(v)));
+        userRepository.save(user);
+        return ResponseEntity.ok(user);
+    }
+
+    @DeleteMapping("/users/{id}")
+    public ResponseEntity<?> removeUser(@PathVariable Long id) {
+        if (!isAdmin())
+            return ResponseEntity.status(403).body("Access denied");
+        User user = userRepository.findById(id).orElse(null);
+        if (user == null)
+            return ResponseEntity.notFound().build();
+        if ("ADMIN".equals(user.getRole()))
+            return ResponseEntity.status(403).body("Cannot remove an admin");
+        // Revoke their key too, if any.
+        if (user.getRegistrationKey() != null) {
+            keyRepository.findByKeyString(user.getRegistrationKey()).ifPresent((k) -> {
+                k.setRevoked(true);
+                keyRepository.save(k);
+            });
+        }
+        userRepository.delete(user);
+        return ResponseEntity.ok(java.util.Map.of("removed", true));
+    }
+
+    @PostMapping("/keys/{id}/revoke")
+    public ResponseEntity<?> revokeKey(@PathVariable Long id) {
+        if (!isAdmin())
+            return ResponseEntity.status(403).body("Access denied");
+        RegistrationKey key = keyRepository.findById(id).orElse(null);
+        if (key == null)
+            return ResponseEntity.notFound().build();
+        key.setRevoked(true);
+        keyRepository.save(key);
+        return ResponseEntity.ok(key);
+    }
 }
