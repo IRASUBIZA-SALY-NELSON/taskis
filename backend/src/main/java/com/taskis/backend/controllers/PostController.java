@@ -4,10 +4,12 @@ import com.taskis.backend.models.Comment;
 import com.taskis.backend.models.Post;
 import com.taskis.backend.models.User;
 import com.taskis.backend.repositories.CommentRepository;
+import com.taskis.backend.config.ScheduledTasks;
 import com.taskis.backend.repositories.PostRepository;
 import com.taskis.backend.repositories.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
@@ -31,6 +33,16 @@ public class PostController {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private SimpMessagingTemplate messagingTemplate;
+
+    private void broadcast(String event, Object payload) {
+        Map<String, Object> m = new HashMap<>();
+        m.put("event", event);
+        m.put("payload", payload);
+        messagingTemplate.convertAndSend("/topic/feed", (Object) m);
+    }
 
     private Map<String, Object> authorDto(User u) {
         Map<String, Object> m = new HashMap<>();
@@ -57,8 +69,11 @@ public class PostController {
         m.put("imageUrl", p.getImageUrl());
         m.put("caption", p.getCaption());
         m.put("createdAt", p.getCreatedAt());
+        m.put("expiresAt", new Date(p.getCreatedAt().getTime() + ScheduledTasks.POST_TTL_MS));
         m.put("likeCount", likes.size());
         m.put("likedByMe", me != null && likes.contains(me));
+        m.put("likers", likes);
+        m.put("reactions", p.getReactions() == null ? "" : p.getReactions());
         m.put("commentCount", commentRepository.countByPostId(p.getId()));
         return m;
     }
@@ -76,8 +91,9 @@ public class PostController {
     public ResponseEntity<?> list(Principal principal) {
         if (principal == null) return ResponseEntity.status(401).body("Unauthorized");
         String me = principal.getName();
+        Date cutoff = new Date(System.currentTimeMillis() - ScheduledTasks.POST_TTL_MS);
         List<Map<String, Object>> out = new ArrayList<>();
-        for (Post p : postRepository.findAllByOrderByCreatedAtDesc()) out.add(postDto(p, me));
+        for (Post p : postRepository.findByCreatedAtAfterOrderByCreatedAtDesc(cutoff)) out.add(postDto(p, me));
         return ResponseEntity.ok(out);
     }
 
@@ -98,7 +114,9 @@ public class PostController {
         p.setCaption(caption);
         p.setCreatedAt(new Date());
         Post saved = postRepository.save(p);
-        return ResponseEntity.ok(postDto(saved, principal.getName()));
+        Map<String, Object> dto = postDto(saved, principal.getName());
+        broadcast("created", dto);
+        return ResponseEntity.ok(dto);
     }
 
     @DeleteMapping("/{id}")
@@ -114,6 +132,7 @@ public class PostController {
         }
         commentRepository.deleteByPostId(id);
         postRepository.delete(p);
+        broadcast("deleted", Map.of("id", id));
         return ResponseEntity.ok(Map.of("removed", true));
     }
 
@@ -127,6 +146,46 @@ public class PostController {
         if (likes.contains(me)) likes.remove(me); else likes.add(me);
         p.setLikedBy(String.join(",", likes));
         postRepository.save(p);
+        broadcast("updated", postDto(p, null));
+        return ResponseEntity.ok(postDto(p, me));
+    }
+
+    @PostMapping("/{id}/react")
+    public ResponseEntity<?> react(@PathVariable Long id, @RequestBody Map<String, String> body, Principal principal) {
+        if (principal == null) return ResponseEntity.status(401).body("Unauthorized");
+        Post p = postRepository.findById(id).orElse(null);
+        if (p == null) return ResponseEntity.notFound().build();
+        String me = principal.getName();
+        String emoji = body.get("emoji");
+        if (emoji == null || emoji.isBlank()) return ResponseEntity.badRequest().body("emoji required");
+
+        java.util.Map<String, java.util.List<String>> reactions = new java.util.LinkedHashMap<>();
+        String raw = p.getReactions() == null ? "" : p.getReactions();
+        if (!raw.isBlank()) {
+            for (String part : raw.split(";")) {
+                if (part.contains(":")) {
+                    String[] kv = part.split(":", 2);
+                    java.util.List<String> us = new java.util.ArrayList<>(java.util.Arrays.asList(kv[1].split(",")));
+                    us.removeIf(String::isBlank);
+                    reactions.put(kv[0], us);
+                }
+            }
+        }
+        reactions.computeIfAbsent(emoji, k -> new java.util.ArrayList<>());
+        if (reactions.get(emoji).contains(me)) {
+            reactions.get(emoji).remove(me);
+            if (reactions.get(emoji).isEmpty()) reactions.remove(emoji);
+        } else {
+            reactions.get(emoji).add(me);
+        }
+        StringBuilder sb = new StringBuilder();
+        for (java.util.Map.Entry<String, java.util.List<String>> e : reactions.entrySet()) {
+            if (sb.length() > 0) sb.append(";");
+            sb.append(e.getKey()).append(":").append(String.join(",", e.getValue()));
+        }
+        p.setReactions(sb.toString());
+        postRepository.save(p);
+        broadcast("updated", postDto(p, null));
         return ResponseEntity.ok(postDto(p, me));
     }
 
@@ -154,6 +213,7 @@ public class PostController {
         c.setContent(content.trim());
         c.setCreatedAt(new Date());
         Comment saved = commentRepository.save(c);
+        broadcast("updated", postDto(p, null));
         return ResponseEntity.ok(commentDto(saved));
     }
 }

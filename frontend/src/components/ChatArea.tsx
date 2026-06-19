@@ -688,8 +688,8 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                     grouped ? (
                       <span className="w-7 flex-none" />
                     ) : (
-                      <span className="w-7 h-7 rounded-full grid place-items-center flex-none text-[11px] font-semibold text-white mt-5" style={{ background: src ? 'transparent' : toneFor(msg.sender?.username || '?') }}>
-                        {src ? <img src={src} alt="" className="w-full h-full rounded-full object-cover" /> : initials(msg.sender?.username || '?')}
+                      <span className="relative overflow-hidden w-7 h-7 rounded-full grid place-items-center flex-none text-[11px] font-semibold text-white mt-5" style={{ background: src ? 'transparent' : toneFor(msg.sender?.username || '?') }}>
+                        {src ? <img src={src} alt="" className="absolute inset-0 w-full h-full object-cover" /> : initials(msg.sender?.username || '?')}
                       </span>
                     )
                   )}

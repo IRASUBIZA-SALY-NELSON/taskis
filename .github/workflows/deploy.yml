@@ -5,6 +5,11 @@ on:
         branches:
             - main
 
+# Avoid overlapping deploys stepping on each other.
+concurrency:
+    group: deploy-taskis
+    cancel-in-progress: false
+
 jobs:
     deploy:
         runs-on: self-hosted
@@ -12,29 +17,65 @@ jobs:
         steps:
             - name: Deploy
               run: |
+                  set -e
                   cd /home/plp/taskis
 
-                  echo "Pull latest code..."
-                  git pull origin main
+                  echo "==> Pull latest code"
+                  BEFORE=$(git rev-parse HEAD)
+                  git fetch origin main
+                  git reset --hard origin/main
+                  AFTER=$(git rev-parse HEAD)
+                  echo "Deploying ${BEFORE} -> ${AFTER}"
 
-                  echo "Build frontend..."
-                  cd frontend
-                  npm install
-                  npm run build
+                  # Detect what changed so we only rebuild what we need.
+                  CHANGED=$(git diff --name-only "${BEFORE}" "${AFTER}" || echo "all")
+                  echo "Changed files:"; echo "${CHANGED:-<none>}"
+                  FRONTEND_CHANGED=false
+                  BACKEND_CHANGED=false
+                  if [ "${BEFORE}" = "${AFTER}" ]; then echo "No new commits."; fi
+                  if echo "$CHANGED" | grep -q '^frontend/' || [ "$CHANGED" = "all" ]; then FRONTEND_CHANGED=true; fi
+                  if echo "$CHANGED" | grep -q '^backend/'  || [ "$CHANGED" = "all" ]; then BACKEND_CHANGED=true; fi
 
-                  echo "Build backend..."
-                  cd ../backend
-                  chmod +x mvnw
-                  ./mvnw clean package -DskipTests
-
-                  echo "Restart backend..."
-                  sudo -n systemctl restart taskis || echo "WARN: backend restart failed — configure passwordless sudo for 'systemctl restart taskis'"
-
-                  echo "Restart frontend..."
-                  cd /home/plp/taskis/frontend
-                  if pm2 describe taskis-frontend > /dev/null 2>&1; then
-                    pm2 restart taskis-frontend --update-env
+                  if [ "$FRONTEND_CHANGED" = "true" ]; then
+                    echo "==> Build frontend"
+                    cd /home/plp/taskis/frontend
+                    if echo "$CHANGED" | grep -q '^frontend/package'; then
+                      npm ci --no-audit --no-fund
+                    else
+                      npm install --no-audit --no-fund
+                    fi
+                    NEXT_TELEMETRY_DISABLED=1 npm run build
                   else
-                    pm2 start "npm run start" --name taskis-frontend
+                    echo "==> Skipping frontend build (no frontend changes)"
                   fi
-                  pm2 save || true
+
+                  if [ "$BACKEND_CHANGED" = "true" ]; then
+                    echo "==> Build backend"
+                    cd /home/plp/taskis/backend
+                    chmod +x mvnw
+                    ./mvnw -q clean package -DskipTests
+                  else
+                    echo "==> Skipping backend build (no backend changes)"
+                  fi
+
+                  if [ "$BACKEND_CHANGED" = "true" ]; then
+                    echo "==> Restart backend"
+                    sudo -n systemctl restart taskis || echo "WARN: backend restart needs passwordless sudo for 'systemctl restart taskis'"
+                  fi
+
+                  if [ "$FRONTEND_CHANGED" = "true" ]; then
+                    echo "==> (Re)start frontend (PM2, zero-downtime reload)"
+                    cd /home/plp/taskis/frontend
+                    if pm2 describe taskis-frontend > /dev/null 2>&1; then
+                      pm2 reload taskis-frontend --update-env
+                    else
+                      pm2 start "npm run start" --name taskis-frontend
+                    fi
+                    pm2 save || true
+                  fi
+
+                  echo "==> Health check"
+                  sleep 3
+                  curl -fsS -o /dev/null "http://127.0.0.1:9091" && echo "frontend OK (9091)" || echo "WARN: frontend health check failed"
+                  curl -fsS -o /dev/null "http://127.0.0.1:8080/api/posts" -H "Authorization: Bearer x" || true
+                  echo "==> Done"

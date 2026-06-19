@@ -67,7 +67,7 @@ export default function ProfileModal({ user, onClose }: Props) {
 
         <div className="flex items-center gap-4 mb-6">
           <button onClick={() => fileRef.current?.click()} className="relative w-16 h-16 rounded-full grid place-items-center flex-none text-lg font-semibold text-white overflow-hidden group" style={{ background: (avatarPreview || currentAvatar) ? 'transparent' : toneFor(user.username) }} title="Change photo">
-            {avatarPreview || currentAvatar ? <img src={avatarPreview || currentAvatar!} alt="" className="w-full h-full object-cover" /> : initials(user.username)}
+            {avatarPreview || currentAvatar ? <img src={avatarPreview || currentAvatar!} alt="" className="absolute inset-0 w-full h-full object-cover" /> : initials(user.username)}
             <span className="absolute inset-0 grid place-items-center bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity"><Camera className="w-5 h-5" /></span>
           </button>
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => pickAvatar(e.target.files?.[0] || null)} />
