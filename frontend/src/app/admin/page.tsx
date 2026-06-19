@@ -2,8 +2,9 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Shield, Key, Users, ArrowLeft, Plus, Copy, Check, RefreshCw } from 'lucide-react';
+import { ChevronLeft, Plus, Copy, Check, RefreshCw } from 'lucide-react';
 import ThemeToggle from '../../components/ThemeToggle';
+import { initials, toneFor } from '../../components/Sidebar';
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -12,53 +13,35 @@ export default function AdminDashboard() {
   const [newUsername, setNewUsername] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const api = (p: string) => `http://${window.location.hostname}:8080${p}`;
+
   useEffect(() => {
     const token = localStorage.getItem('token');
     const userData = localStorage.getItem('user');
-    if (!token || !userData) {
-      router.push('/');
-      return;
-    }
-    const user = JSON.parse(userData);
-    if (user.role !== 'ADMIN' && user.username.toLowerCase() !== 'nelson') {
-      router.push('/chat');
-      return;
-    }
+    if (!token || !userData) { router.push('/'); return; }
+    const u = JSON.parse(userData);
+    if (u.role !== 'ADMIN' && u.username.toLowerCase() !== 'nelson') { router.push('/chat'); return; }
     fetchData();
   }, [router]);
 
   const fetchData = async () => {
     try {
-      const usersRes = await fetch(`http://${window.location.hostname}:8080/api/admin/users`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-      });
-      setUsers(await usersRes.json());
-    } catch (e) {
-      console.error(e);
-    }
+      const res = await fetch(api('/api/admin/users'), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+      setUsers(await res.json());
+    } catch (e) { console.error(e); }
   };
 
   const generateKey = async (username: string) => {
     if (!username.trim()) return;
     setLoading(true);
     try {
-      const res = await fetch(`http://${window.location.hostname}:8080/api/admin/keys`, {
+      const res = await fetch(api('/api/admin/keys'), {
         method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ username })
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username }),
       });
-      if (res.ok) {
-          setNewUsername('');
-          fetchData();
-      } else {
-          alert(await res.text());
-      }
-    } catch (e) {
-      console.error(e);
-    }
+      if (res.ok) { setNewUsername(''); fetchData(); } else { alert(await res.text()); }
+    } catch (e) { console.error(e); }
     setLoading(false);
   };
 
@@ -70,141 +53,116 @@ export default function AdminDashboard() {
         await navigator.clipboard.writeText(keyString);
         success = true;
       } else {
-        const textArea = document.createElement("textarea");
-        textArea.value = keyString;
-        textArea.style.position = "fixed";
-        textArea.style.top = "0";
-        textArea.style.left = "0";
-        textArea.style.opacity = "0";
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
+        const ta = document.createElement('textarea');
+        ta.value = keyString;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus(); ta.select();
         success = document.execCommand('copy');
-        document.body.removeChild(textArea);
+        document.body.removeChild(ta);
       }
-} catch (err) {
-      console.error('Failed to copy text: ', err);
-    }
+    } catch (err) { console.error('Failed to copy:', err); }
     if (success) {
       setCopiedKey(keyString);
       setTimeout(() => setCopiedKey(null), 2000);
     } else {
-      // Fallback: show full key in a prompt so user can manuallycopy
       window.prompt('Copy the key below (Ctrl+C):', keyString);
     }
   };
 
+  const members = users.filter((u: any) => u.username !== 'Taskis Bot');
+  const shortKey = (k?: string) => (k ? `${k.slice(0, 8)}…${k.slice(-6)}` : 'N/A');
+
   return (
-    <div className="min-h-screen bg-background text-text p-8">
-      <div className="max-w-6xl mx-auto space-y-8">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button onClick={() => router.push('/chat')} className="p-2 bg-surface-light border border-border rounded-xl hover:bg-bg-hover transition-colors">
-              <ArrowLeft className="w-5 h-5" />
+    <div className="scroll h-screen overflow-y-auto bg-bg">
+      {/* header */}
+      <header className="flex items-center gap-[13px] px-7 h-[62px] border-b border-border sticky top-0 bg-bg/90 backdrop-blur z-10">
+        <button onClick={() => router.push('/chat')} aria-label="Back" className="icon-btn w-8 h-8">
+          <ChevronLeft className="w-[15px] h-[15px]" />
+        </button>
+        <div className="flex-1">
+          <div className="text-[15.5px] font-semibold text-t1 leading-tight">Admin</div>
+          <div className="text-xs text-t2">Manage access for this team</div>
+        </div>
+        <ThemeToggle />
+      </header>
+
+      <div className="max-w-[860px] mx-auto px-7 pt-[30px] pb-16 flex flex-col gap-[26px]">
+        {/* generate */}
+        <section className="card p-[22px]">
+          <div className="eyebrow mb-1">Invite</div>
+          <h2 className="text-[17px] font-semibold text-t1 mb-1">Generate a registration key</h2>
+          <p className="text-[13.5px] text-t2 mb-4 leading-relaxed max-w-[520px]">
+            Each key is single-use and assigned to one operative. Share it over a secure channel.
+          </p>
+          <form
+            onSubmit={(e) => { e.preventDefault(); generateKey(newUsername); }}
+            className="flex gap-2.5 max-w-[520px]"
+          >
+            <input
+              value={newUsername}
+              onChange={(e) => setNewUsername(e.target.value)}
+              placeholder="Operative codename (e.g. Cipher)"
+              className="tk-input flex-1"
+            />
+            <button type="submit" disabled={loading || !newUsername.trim()} className="btn-accent px-[18px] text-sm whitespace-nowrap">
+              {loading ? <span className="w-[15px] h-[15px] rounded-full border-2 border-white/35 border-t-white tk-spin" /> : <Plus className="w-[15px] h-[15px]" />}
+              Generate key
             </button>
-            <h1 className="text-3xl font-bold flex items-center gap-3 text-primary">
-              <Shield className="text-primary" /> SECURE ADMIN DASHBOARD
-            </h1>
-          </div>
-          <ThemeToggle />
-        </div>
+          </form>
+        </section>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Registration Form */}
-          <div className="bg-surface-light/30 p-6 rounded-2xl border border-border lg:col-span-1 h-fit">
-            <h2 className="text-xl font-bold tracking-widest uppercase flex items-center gap-2 mb-6">
-              <Plus className="w-5 h-5 text-primary" /> Register Operative
-            </h2>
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs text-text-muted uppercase tracking-wider font-bold mb-2 block">Assign Codename</label>
-                <input
-                  type="text"
-                  value={newUsername}
-                  onChange={e => setNewUsername(e.target.value)}
-                  placeholder="e.g. Agent-X"
-                  className="w-full bg-background border border-border rounded-lg p-3 focus:outline-none focus:border-primary transition-colors text-text"
-                />
+        {/* members + keys */}
+        <section className="card overflow-hidden">
+          <div className="flex items-center gap-2.5 px-[22px] pt-[18px] pb-3.5 border-b border-border">
+            <h2 className="text-[15px] font-semibold text-t1 flex-1">Members &amp; keys</h2>
+            <span className="text-[12.5px] text-t3">{members.length} of 12</span>
+          </div>
+
+          {/* column header */}
+          <div className="hidden sm:grid items-center gap-3.5 px-[22px] py-2.5 border-b border-border eyebrow" style={{ gridTemplateColumns: '1fr 220px 90px 80px', letterSpacing: '0.05em' }}>
+            <span>Operative</span><span>Access key</span><span>Role</span><span className="text-right">Actions</span>
+          </div>
+
+          {members.map((u: any) => (
+            <div key={u.id} className="grid items-center gap-3.5 px-[22px] py-3 border-b border-border last:border-b-0" style={{ gridTemplateColumns: '1fr 220px 90px 80px' }}>
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="w-[34px] h-[34px] rounded-full grid place-items-center flex-none text-[13px] font-semibold text-white" style={{ background: toneFor(u.username) }}>
+                  {initials(u.username)}
+                </span>
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-t1 truncate">{u.username}</div>
+                  <div className="text-[12.5px] text-t3">@{u.username.toLowerCase()}</div>
+                </div>
               </div>
-              <button
-                onClick={() => generateKey(newUsername)}
-                disabled={loading || !newUsername.trim()}
-                className="w-full py-3 bg-primary/20 text-primary border border-primary/50 rounded-xl hover:bg-primary hover:text-background transition-all font-bold tracking-widest uppercase text-sm flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                <Key className="w-4 h-4" /> Generate Access Key
-              </button>
-            </div>
-          </div>
-
-          {/* Personnel Table */}
-          <div className="bg-surface-light/30 p-6 rounded-2xl border border-border overflow-x-auto lg:col-span-2">
-            <h2 className="text-xl font-bold tracking-widest uppercase mb-6 flex items-center gap-2">
-               <Users className="w-5 h-5 text-primary" /> Active Personnel
-            </h2>
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-border text-xs tracking-widest uppercase text-text-muted">
-                  <th className="p-4 font-medium">Codename</th>
-                  <th className="p-4 font-medium">Clearance</th>
-                  <th className="p-4 font-medium">Access Key</th>
-                  <th className="p-4 font-medium text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.filter((u: any) => u.username !== 'Taskis Bot').map((u: any) => (
-                  <tr key={u.id} className="border-b border-border hover:bg-bg-hover transition-colors">
-                    <td className="p-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center font-bold text-primary border border-primary/50 text-xs">
-                          {u.username.charAt(0).toUpperCase()}
-                        </div>
-                        <span className="font-bold">{u.username}</span>
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <span className={`px-2 py-1 rounded text-[10px] uppercase font-bold tracking-widest ${u.role === 'ADMIN' ? 'bg-red-500/20 text-red-500 border border-red-500/50' : 'bg-primary/20 text-primary border border-primary/50'}`}>
-                        {u.role}
-                      </span>
-                    </td>
-                    <td className="p-4 max-w-[200px]">
-                       <div className="truncate font-mono text-xs text-text-muted bg-background/50 px-2 py-1 rounded border border-border">
-                           {u.registrationKey || 'N/A'}
-                       </div>
-                    </td>
-                    <td className="p-4 text-right">
-                       <div className="flex justify-end gap-2">
-                           <button
-                             onClick={() => copyToClipboard(u.registrationKey)}
-                             disabled={!u.registrationKey}
-                             className="p-2 bg-surface-light border border-border rounded hover:bg-bg-hover transition-colors disabled:opacity-50"
-                             title="Copy Key"
-                           >
-                             {copiedKey === u.registrationKey ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 text-primary" />}
-                           </button>
-                           <button
-                             onClick={() => {
-                                 if (confirm(`Regenerate access key for ${u.username}? This revokes the previous key.`)) {
-                                     generateKey(u.username);
-                                 }
-                             }}
-                             className="p-2 bg-surface-light border border-border rounded hover:bg-red-500/20 hover:text-red-400 transition-colors"
-                             title="Regenerate Key"
-                           >
-                             <RefreshCw className="w-4 h-4" />
-                           </button>
-                       </div>
-                    </td>
-                  </tr>
-                ))}
-                {users.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="p-8 text-center text-text-muted">No personnel found.</td>
-                  </tr>
+              <span className="font-mono text-[13px] text-t2 truncate hidden sm:block" title={u.registrationKey || ''}>{shortKey(u.registrationKey)}</span>
+              <span className="hidden sm:block">
+                {u.role === 'ADMIN' ? (
+                  <span className="text-[11.5px] font-semibold text-accent-text bg-accent-soft rounded-full px-2.5 py-0.5">Admin</span>
+                ) : (
+                  <span className="text-[11.5px] font-medium text-t3 bg-surface-2 border border-border rounded-full px-2.5 py-0.5">Operative</span>
                 )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+              </span>
+              <div className="flex justify-end gap-1">
+                <button onClick={() => copyToClipboard(u.registrationKey)} disabled={!u.registrationKey} className="icon-btn w-[30px] h-[30px] border-0 disabled:opacity-40" title="Copy key">
+                  {copiedKey === u.registrationKey ? <Check className="w-[15px] h-[15px] text-online" /> : <Copy className="w-[15px] h-[15px]" />}
+                </button>
+                <button
+                  onClick={() => { if (confirm(`Regenerate access key for ${u.username}? This revokes the previous key.`)) generateKey(u.username); }}
+                  className="icon-btn w-[30px] h-[30px] border-0"
+                  title="Regenerate key"
+                >
+                  <RefreshCw className="w-[15px] h-[15px]" />
+                </button>
+              </div>
+            </div>
+          ))}
+
+          {members.length === 0 && (
+            <div className="px-[22px] py-12 text-center text-t3 text-sm">No personnel found.</div>
+          )}
+        </section>
       </div>
     </div>
   );

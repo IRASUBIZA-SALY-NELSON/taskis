@@ -1,5 +1,7 @@
+'use client';
+
 import React from 'react';
-import { Hash, Shield, Users, LogOut, Menu } from 'lucide-react';
+import { Hash, Lock, Shield, LogOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import ThemeToggle from './ThemeToggle';
 
@@ -11,99 +13,96 @@ interface SidebarProps {
   setIsOpen: (o: boolean) => void;
 }
 
+const AVATAR_TONES = ['#5a4a38', '#4a463f', '#574a3e', '#454039', '#5c5044', '#403c37'];
+
+export function initials(name: string) {
+  return (name || '?').charAt(0).toUpperCase();
+}
+
+export function toneFor(name: string) {
+  let sum = 0;
+  for (let i = 0; i < (name || '').length; i++) sum += name.charCodeAt(i);
+  return AVATAR_TONES[sum % AVATAR_TONES.length];
+}
+
+function presenceColor(status: string) {
+  if (status === 'ACTIVE') return 'var(--online)';
+  if (status === 'AWAY') return 'var(--away)';
+  return 'var(--t3)';
+}
+
 export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen, setIsOpen }: SidebarProps) {
   const router = useRouter();
-
   const channels = ['general', 'intel', 'alerts', 'confidential'];
-
   const [operatives, setOperatives] = React.useState<any[]>([]);
-
   const [unread, setUnread] = React.useState<Record<string, boolean>>({});
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const api = (p: string) => `http://${window.location.hostname}:8080${p}`;
 
   React.useEffect(() => {
-    // update current channel lastRead
     if (activeChannel) {
-        const lastReadStr = localStorage.getItem('lastRead');
-        const lastRead = lastReadStr ? JSON.parse(lastReadStr) : {};
-        lastRead[activeChannel] = Date.now();
-        localStorage.setItem('lastRead', JSON.stringify(lastRead));
+      const lastReadStr = localStorage.getItem('lastRead');
+      const lastRead = lastReadStr ? JSON.parse(lastReadStr) : {};
+      lastRead[activeChannel] = Date.now();
+      localStorage.setItem('lastRead', JSON.stringify(lastRead));
     }
 
     const fetchData = () => {
-      fetch(`http://${window.location.hostname}:8080/api/chat/users`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-      })
-      .then(res => {
-        if (!res.ok) throw new Error('Not OK');
-        return res.json();
-      })
-      .then(data => {
-          if(Array.isArray(data)) setOperatives(data.filter(u => u.username !== user.username && u.username !== 'Taskis Bot'));
-      })
-      .catch(console.error);
+      fetch(api('/api/chat/users'), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
+        .then((res) => { if (!res.ok) throw new Error('Not OK'); return res.json(); })
+        .then((data) => {
+          if (Array.isArray(data)) setOperatives(data.filter((u) => u.username !== user.username && u.username !== 'Taskis Bot'));
+        })
+        .catch(console.error);
 
-      fetch(`http://${window.location.hostname}:8080/api/chat/channels/latest`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-      })
-      .then(res => {
-        if (!res.ok) throw new Error('Not OK');
-        return res.json();
-      })
-      .then(data => {
+      fetch(api('/api/chat/channels/latest'), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
+        .then((res) => { if (!res.ok) throw new Error('Not OK'); return res.json(); })
+        .then((data) => {
           const lastReadStr = localStorage.getItem('lastRead');
           const lastRead = lastReadStr ? JSON.parse(lastReadStr) : {};
           const newUnread: Record<string, boolean> = {};
           for (const ch in data) {
-              const latestDate = new Date(data[ch]).getTime();
-              const readDate = lastRead[ch] || 0;
-              if (latestDate > readDate && ch !== activeChannel) {
-                  newUnread[ch] = true;
-              }
+            const latestDate = new Date(data[ch]).getTime();
+            const readDate = lastRead[ch] || 0;
+            if (latestDate > readDate && ch !== activeChannel) newUnread[ch] = true;
           }
           setUnread(newUnread);
-      })
-      .catch(console.error);
+        })
+        .catch(console.error);
     };
     fetchData();
     const int = setInterval(fetchData, 5000);
     return () => clearInterval(int);
   }, [user.username, activeChannel]);
 
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
-
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     const formData = new FormData();
     formData.append('file', file);
     try {
-        const uploadRes = await fetch(`http://${window.location.hostname}:8080/api/chat/upload`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-            body: formData
-        });
-        if (!uploadRes.ok) throw new Error('Upload failed: ' + uploadRes.status);
-        const uploadData = await uploadRes.json();
-
-        const res = await fetch(`http://${window.location.hostname}:8080/api/chat/avatar`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            },
-            body: JSON.stringify({ avatarUrl: uploadData.url })
-        });
-
-        if (res.ok) {
-            const updatedUser = await res.json();
-            localStorage.setItem('user', JSON.stringify(updatedUser));
-            window.location.reload();
-        } else {
-            alert(await res.text());
-        }
+      const uploadRes = await fetch(api('/api/chat/upload'), {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        body: formData,
+      });
+      if (!uploadRes.ok) throw new Error('Upload failed: ' + uploadRes.status);
+      const uploadData = await uploadRes.json();
+      const res = await fetch(api('/api/chat/avatar'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
+        body: JSON.stringify({ avatarUrl: uploadData.url }),
+      });
+      if (res.ok) {
+        const updatedUser = await res.json();
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        window.location.reload();
+      } else {
+        alert(await res.text());
+      }
     } catch (err) {
-        console.error(err);
+      console.error(err);
     }
   };
 
@@ -114,128 +113,108 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
   };
 
   const getDmChannel = (otherId: number) => {
-      const ids = [user.id, otherId].sort();
-      return `dm_${ids[0]}_${ids[1]}`;
+    const ids = [user.id, otherId].sort();
+    return `dm_${ids[0]}_${ids[1]}`;
   };
+
+  const avatarSrc = (u: any) =>
+    u.avatarUrl ? (u.avatarUrl.startsWith('http') ? u.avatarUrl : api(u.avatarUrl)) : null;
 
   if (!isOpen) return null;
 
+  const SectionLabel = ({ children }: { children: React.ReactNode }) => (
+    <div className="eyebrow px-[9px] pt-4 pb-[5px]" style={{ letterSpacing: '0.08em' }}>{children}</div>
+  );
+
+  const itemCls = (active: boolean) =>
+    `flex items-center gap-[9px] w-full text-left rounded-lg px-[9px] py-[7px] cursor-pointer transition-colors ${
+      active ? 'bg-accent-soft text-t1' : 'text-t2 hover:bg-hover hover:text-t1'
+    }`;
+
   return (
-    <aside className="w-64 glass border-r border-border h-full flex flex-col z-20">
-      <div className="p-4 border-b border-border flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Shield className="w-6 h-6 text-primary" />
-          <h1 className="font-bold text-lg tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary glow-text">TASKIS</h1>
-        </div>
+    <aside className="w-[264px] flex-none flex flex-col h-screen bg-surface border-r border-border">
+      {/* header */}
+      <div className="flex items-center gap-[9px] px-4 pt-4 pb-[13px] border-b border-border">
+        <span className="tk-mark" style={{ width: 26, height: 26, borderRadius: 8 }}>
+          <i style={{ width: 6, height: 6 }} />
+          <b style={{ width: 2, height: 4 }} />
+        </span>
+        <span className="flex-1 text-[15px] font-semibold tracking-[-0.01em] text-t1">Taskis</span>
+        <Lock className="w-[11px] h-[11px] text-t3" />
       </div>
 
-      <div className="flex-1 overflow-y-auto py-4">
-        <div className="px-4 mb-2 text-xs font-semibold text-text-muted uppercase tracking-wider">Secure Channels</div>
-        <div className="space-y-1">
-          {channels.map(c => (
-            <button
-              key={c}
-              onClick={() => setActiveChannel(c)}
-              className={`w-full flex items-center gap-2 px-4 py-2 text-sm transition-colors ${activeChannel === c ? 'bg-primary/10 text-primary border-r-2 border-primary' : 'text-text hover:bg-surface-light/50 hover:text-primary/80'}`}
-            >
-              <Hash className="w-4 h-4 opacity-50" />
-              <span className="flex-1 text-left">{c.charAt(0).toUpperCase() + c.slice(1)}</span>
-              {unread[c] && (
-                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-              )}
+      {/* lists */}
+      <div className="scroll flex-1 overflow-y-auto px-2 py-2.5">
+        <SectionLabel>Channels</SectionLabel>
+        {channels.map((c) => {
+          const active = activeChannel === c;
+          const locked = c === 'confidential';
+          return (
+            <button key={c} onClick={() => setActiveChannel(c)} className={itemCls(active)}>
+              <span className="w-3.5 text-center text-[15px] flex-none" style={{ color: active ? 'var(--accent-text)' : 'var(--t3)' }}>#</span>
+              <span className="flex-1 text-sm font-medium">{c.charAt(0).toUpperCase() + c.slice(1)}</span>
+              {locked && <Lock className="w-[13px] h-[13px] text-t3" />}
+              {unread[c] && <span className="bg-accent text-on-accent text-[11px] font-semibold min-w-[8px] px-1.5 py-px rounded-full">●</span>}
             </button>
-          ))}
-        </div>
+          );
+        })}
 
+        <SectionLabel>Bots</SectionLabel>
+        <button onClick={() => setActiveChannel('taskis-bot')} className={itemCls(activeChannel === 'taskis-bot')}>
+          <span className="w-[22px] h-[22px] rounded-md bg-accent-soft text-accent-text text-[11px] font-bold grid place-items-center flex-none">TB</span>
+          <span className="flex-1 text-sm font-medium">Taskis Bot</span>
+          {unread['taskis-bot'] && <span className="bg-accent text-on-accent text-[11px] font-semibold px-1.5 py-px rounded-full">●</span>}
+        </button>
 
-
-        <div className="px-4 mt-8 mb-2 text-xs font-semibold text-text-muted uppercase tracking-wider">System Bots</div>
-        <div className="space-y-1">
-          <button
-            onClick={() => setActiveChannel('taskis-bot')}
-            className={`w-full flex items-center gap-2 px-4 py-2 text-sm transition-colors ${activeChannel === 'taskis-bot' ? 'bg-primary/10 text-primary border-r-2 border-primary' : 'text-text hover:bg-surface-light/50 hover:text-primary/80'}`}
-          >
-            <div className="relative">
-              <img src="https://api.dicebear.com/7.x/bottts/svg?seed=TaskisBot" alt="" className="w-6 h-6 rounded-full bg-surface-light border border-border" />
-              <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-background bg-primary animate-pulse"></span>
-            </div>
-            <span className="flex-1 text-left font-medium">Taskis Bot</span>
-            {unread['taskis-bot'] && (
-              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-            )}
-          </button>
-        </div>
-
-        <div className="px-4 mt-8 mb-2 text-xs font-semibold text-text-muted uppercase tracking-wider">Operatives ({operatives.filter(op => op.username !== 'Taskis Bot').length + 1}/12)</div>
-        <div className="space-y-1">
-          {operatives.map(op => {
-              const channelId = getDmChannel(op.id);
-              return (
-                <button
-                  key={op.id}
-                  onClick={() => setActiveChannel(channelId)}
-                  className={`w-full flex items-center gap-2 px-4 py-2 text-sm transition-colors ${activeChannel === channelId ? 'bg-primary/10 text-primary border-r-2 border-primary' : 'text-text hover:bg-surface-light/50 hover:text-primary/80'}`}
-                >
-                  <div className="relative">
-                    {op.avatarUrl ? (
-                        <img src={op.avatarUrl.startsWith('http') ? op.avatarUrl : `http://${window.location.hostname}:8080${op.avatarUrl}`} alt="" className="w-6 h-6 rounded-full bg-surface-light border border-border object-cover" />
-                    ) : (
-                        <div className="w-6 h-6 rounded-full bg-surface-light border border-border flex items-center justify-center text-[10px] text-text-muted">{op.username.charAt(0).toUpperCase()}</div>
-                    )}
-                    <span className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-background ${op.status === 'ACTIVE' ? 'bg-primary animate-pulse' : 'bg-gray-500'}`}></span>
-                  </div>
-                  <span className="flex-1 text-left">{op.username}</span>
-                  {unread[channelId] && (
-                    <span className="text-[10px] font-bold bg-red-500 text-text px-1.5 py-0.5 rounded-full">New</span>
-                  )}
-                </button>
-              );
-          })}
-        </div>
+        <SectionLabel>Operatives</SectionLabel>
+        {operatives.map((op) => {
+          const channelId = getDmChannel(op.id);
+          const active = activeChannel === channelId;
+          const src = avatarSrc(op);
+          return (
+            <button key={op.id} onClick={() => setActiveChannel(channelId)} className={itemCls(active)}>
+              <span className="relative w-[25px] h-[25px] rounded-full grid place-items-center flex-none text-[11px] font-semibold text-white" style={{ background: src ? 'transparent' : toneFor(op.username) }}>
+                {src ? <img src={src} alt="" className="w-full h-full rounded-full object-cover" /> : initials(op.username)}
+                <span className="absolute -right-px -bottom-px w-[9px] h-[9px] rounded-full" style={{ background: presenceColor(op.status), border: '2px solid var(--surface-1)' }} />
+              </span>
+              <span className="flex-1 text-sm font-medium truncate">{op.username}</span>
+              {unread[channelId] && <span className="bg-accent text-on-accent text-[11px] font-semibold px-1.5 py-px rounded-full">New</span>}
+            </button>
+          );
+        })}
       </div>
 
-      <div className="p-4 border-t border-border bg-surface-light/30">
-        <div className="flex items-center gap-3 mb-4">
+      {/* user card */}
+      <div className="border-t border-border px-3 py-[11px]">
+        <div className="flex items-center gap-2.5">
           <input type="file" className="hidden" ref={fileInputRef} onChange={handleAvatarChange} accept="image/*" />
-          {user.avatarUrl ? (
-            <img
-              src={user.avatarUrl.startsWith('http') ? user.avatarUrl : `http://${window.location.hostname}:8080${user.avatarUrl}`}
-              alt="avatar"
-              onClick={() => fileInputRef.current?.click()}
-              className="w-10 h-10 rounded-full bg-surface-light border border-primary/30 cursor-pointer hover:opacity-80 transition-opacity object-cover"
-              title="Change Profile Picture"
-            />
-          ) : (
-            <div
-              onClick={() => fileInputRef.current?.click()}
-              className="w-10 h-10 rounded-full bg-surface-light border border-primary/30 cursor-pointer hover:opacity-80 transition-opacity flex items-center justify-center text-text-muted text-sm"
-              title="Change Profile Picture"
-            >
-              {user.username.charAt(0).toUpperCase()}
-            </div>
-          )}
-          <div className="flex-1 overflow-hidden">
-            <div className="text-sm font-medium text-text truncate">{user.username}</div>
-            <div className="text-xs text-primary flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-primary inline-block animate-pulse"></span> Online
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            title="Change profile picture"
+            className="relative w-8 h-8 rounded-full grid place-items-center flex-none text-xs font-semibold text-white hover:opacity-80 transition-opacity"
+            style={{ background: avatarSrc(user) ? 'transparent' : toneFor(user.username) }}
+          >
+            {avatarSrc(user) ? <img src={avatarSrc(user)!} alt="" className="w-full h-full rounded-full object-cover" /> : initials(user.username)}
+          </button>
+          <div className="flex-1 min-w-0">
+            <div className="text-[13.5px] font-semibold text-t1 truncate">{user.username}</div>
+            <div className="flex items-center gap-1.5 text-[11.5px] text-t3">
+              <span className="w-[7px] h-[7px] rounded-full" style={{ background: 'var(--online)' }} />
+              Online
             </div>
           </div>
           <ThemeToggle />
         </div>
-        {(user.role === 'ADMIN' || user.username.toLowerCase() === 'nelson') && (
-          <button
-            onClick={() => router.push('/admin')}
-            className="w-full flex items-center justify-center gap-2 py-2 mb-2 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-sm font-medium"
-          >
-            <Shield className="w-4 h-4" /> Admin Panel
+        <div className="flex gap-1.5 mt-2.5">
+          {(user.role === 'ADMIN' || user.username.toLowerCase() === 'nelson') && (
+            <button onClick={() => router.push('/admin')} className="btn-secondary flex-1 py-[7px] text-[12.5px]">
+              <Shield className="w-[13px] h-[13px]" /> Admin
+            </button>
+          )}
+          <button onClick={handleLogout} className="btn-secondary flex-1 py-[7px] text-[12.5px]">
+            <LogOut className="w-[13px] h-[13px]" /> Logout
           </button>
-        )}
-        <button
-          onClick={handleLogout}
-          className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors text-sm font-medium"
-        >
-          <LogOut className="w-4 h-4" /> Disconnect
-        </button>
+        </div>
       </div>
     </aside>
   );

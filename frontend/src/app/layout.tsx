@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TASKIS | Secure Comm Link",
-  description: "Encrypted P2P Comm Link • E2E Enabled",
+  title: "Taskis",
+  description: "A private, end-to-end encrypted team messenger.",
 };
 
 export default function RootLayout({
