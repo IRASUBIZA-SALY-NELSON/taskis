@@ -28,8 +28,13 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   const [passphrase, setPassphrase] = useState('');
   const [unlockErr, setUnlockErr] = useState('');
   const [unlockLoading, setUnlockLoading] = useState(false);
+  const [newCount, setNewCount] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
   const editRef = useRef<HTMLInputElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const taRef = useRef<HTMLTextAreaElement>(null);
+  const nearBottomRef = useRef(true);
+  const prevLenRef = useRef(0);
 
   const isBot = channel === 'taskis-bot';
   const isDm = channel.startsWith('dm_');
@@ -44,6 +49,9 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   useEffect(() => {
     setLoading(true);
     setMessages([]);
+    setNewCount(0);
+    nearBottomRef.current = true;
+    prevLenRef.current = 0;
     fetch(api(`/api/chat/messages/${channel}`), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
       .then((r) => { if (r.status === 401 || r.status === 403) { localStorage.clear(); window.location.href = '/'; } return r.json(); })
       .then((d) => { setMessages(d); setLoading(false); })
@@ -76,7 +84,31 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     });
   }, [messages]);
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages.length]);
+  useEffect(() => {
+    const grew = messages.length - prevLenRef.current;
+    prevLenRef.current = messages.length;
+    if (grew <= 0) return;
+    if (nearBottomRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      setNewCount(0);
+    } else {
+      setNewCount((c) => c + grew);
+    }
+  }, [messages.length]);
+
+  const onScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+    nearBottomRef.current = dist < 120;
+    if (nearBottomRef.current && newCount) setNewCount(0);
+  };
+
+  const jumpToLatest = () => {
+    nearBottomRef.current = true;
+    setNewCount(0);
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
 
   useEffect(() => {
     const close = (e: MouseEvent) => {
@@ -109,6 +141,8 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     await fetch(api('/api/chat/send'), { method: 'POST', headers: authH(), body: JSON.stringify({ content: input, channel, attachmentUrl, attachmentType, replyToId: replyTo?.id ?? null }) });
     setInput('');
     setReplyTo(null);
+    nearBottomRef.current = true;
+    if (taRef.current) taRef.current.style.height = 'auto';
     fetchMsgs();
   };
 
@@ -170,6 +204,22 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
 
   const fileNameOf = (url: string) => url.split('/').pop()?.split('_').slice(1).join('_') || 'Document';
 
+  const linkify = (text: string) =>
+    text.split(/(https?:\/\/[^\s]+)/g).map((part, i) =>
+      /^https?:\/\//.test(part)
+        ? <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="underline text-accent-text break-all hover:opacity-80">{part}</a>
+        : <span key={i}>{part}</span>,
+    );
+
+  const autoGrow = () => {
+    const ta = taRef.current;
+    if (ta) { ta.style.height = 'auto'; ta.style.height = `${Math.min(ta.scrollHeight, 140)}px`; }
+  };
+
+  const onComposerKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(e as any); }
+  };
+
   const Attachment = ({ msg, mine }: { msg: any; mine: boolean }) => {
     if (!msg.attachmentUrl) return null;
     const full = api(msg.attachmentUrl);
@@ -209,7 +259,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
       </header>
 
       {/* messages */}
-      <div className="scroll flex-1 overflow-y-auto px-[22px] pt-4 pb-2">
+      <div ref={scrollRef} onScroll={onScroll} className="scroll flex-1 overflow-y-auto px-[22px] pt-4 pb-2">
         {!loading && messages.length > 0 && (
           <button onClick={() => { setUnlockErr(''); setShowUnlock(true); }} className="flex items-center justify-center gap-2 mx-auto mb-2 px-3.5 py-1.5 rounded-full bg-surface-2 border border-border text-[12px] text-t2 hover:text-t1 hover:border-border-strong transition-colors">
             <Lock className="w-[12px] h-[12px]" />Older history is sealed · <span className="text-accent-text font-medium">unlock archive</span>
@@ -240,6 +290,9 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
           messages.map((msg, idx) => {
             const isMe = msg.sender?.username === user.username;
             const showDivider = idx === 0 || !sameDay(msg.timestamp, messages[idx - 1].timestamp);
+            const prev = idx > 0 ? messages[idx - 1] : null;
+            const grouped = !!prev && !showDivider && prev.sender?.username === msg.sender?.username
+              && (new Date(msg.timestamp).getTime() - new Date(prev.timestamp).getTime()) < 5 * 60 * 1000;
             const rx = parseRx(msg.reactions);
             const isDeleted = !!msg.deleted;
             const canEdit = isMe && !isDeleted && !readByOthers(msg);
@@ -255,21 +308,27 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                   </div>
                 )}
 
-                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={`group flex gap-[11px] mt-3.5 ${isMe ? 'flex-row-reverse' : ''}`}>
-                  {/* avatar (others only) */}
+                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={`group flex gap-[11px] ${grouped ? 'mt-0.5' : 'mt-3.5'} ${isMe ? 'flex-row-reverse' : ''}`}>
+                  {/* avatar (others only; hidden when grouped but space preserved) */}
                   {!isMe && (
-                    <span className="w-7 h-7 rounded-full grid place-items-center flex-none text-[11px] font-semibold text-white mt-5" style={{ background: src ? 'transparent' : toneFor(msg.sender?.username || '?') }}>
-                      {src ? <img src={src} alt="" className="w-full h-full rounded-full object-cover" /> : initials(msg.sender?.username || '?')}
-                    </span>
+                    grouped ? (
+                      <span className="w-7 flex-none" />
+                    ) : (
+                      <span className="w-7 h-7 rounded-full grid place-items-center flex-none text-[11px] font-semibold text-white mt-5" style={{ background: src ? 'transparent' : toneFor(msg.sender?.username || '?') }}>
+                        {src ? <img src={src} alt="" className="w-full h-full rounded-full object-cover" /> : initials(msg.sender?.username || '?')}
+                      </span>
+                    )
                   )}
 
                   <div className={`min-w-0 max-w-[76%] flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
                     {/* meta */}
-                    <div className={`flex items-baseline gap-2 mb-1 ${isMe ? 'flex-row-reverse' : ''}`}>
-                      <span className="text-[13px] font-semibold text-t1">{isMe ? 'You' : msg.sender?.username}</span>
-                      <span className="text-[11px] text-t3">{fmt(msg.timestamp)}</span>
-                      {msg.edited && !isDeleted && <span className="text-[11px] text-t3 italic">edited</span>}
-                    </div>
+                    {!grouped && (
+                      <div className={`flex items-baseline gap-2 mb-1 ${isMe ? 'flex-row-reverse' : ''}`}>
+                        <span className="text-[13px] font-semibold text-t1">{isMe ? 'You' : msg.sender?.username}</span>
+                        <span className="text-[11px] text-t3">{fmt(msg.timestamp)}</span>
+                        {msg.edited && !isDeleted && <span className="text-[11px] text-t3 italic">edited</span>}
+                      </div>
+                    )}
 
                     {/* reply preview */}
                     {msg.replyTo && (
@@ -286,7 +345,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                           className={`px-[13px] py-[9px] text-[14.5px] leading-relaxed border border-border whitespace-pre-wrap break-words ${isDeleted ? 'opacity-50 italic text-t2' : 'text-t1'}`}
                           style={{ background: isMe ? 'var(--bubble-own)' : 'var(--bubble-other)', borderRadius: isMe ? '15px 5px 15px 15px' : '5px 15px 15px 15px' }}
                         >
-                          {msg.content && <span>{msg.content}</span>}
+                          {msg.content && <span>{isDeleted ? msg.content : linkify(msg.content)}</span>}
                           {!isDeleted && <Attachment msg={msg} mine={isMe} />}
                         </div>
                       </div>
@@ -356,6 +415,16 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
         <div ref={bottomRef} />
       </div>
 
+      {/* jump to latest */}
+      {newCount > 0 && (
+        <div className="px-[22px] flex justify-center pointer-events-none">
+          <button onClick={jumpToLatest} className="pointer-events-auto -mt-1 mb-1 flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-accent text-on-accent text-[12.5px] font-medium shadow-[var(--shadow-md)] hover:bg-accent-hover transition-colors">
+            {newCount} new message{newCount > 1 ? 's' : ''}
+            <span aria-hidden>↓</span>
+          </button>
+        </div>
+      )}
+
       {/* composer / read-only */}
       {isBot ? (
         <div className="px-[22px] py-[17px] flex-none border-t border-border flex items-center justify-center gap-2 text-t3 text-[13px]">
@@ -393,7 +462,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                   <Paperclip className="w-[18px] h-[18px]" />
                   <input type="file" className="hidden" onChange={(e) => setFile(e.target.files?.[0] || null)} />
                 </label>
-                <input type="text" value={input} onChange={(e) => setInput(e.target.value)} placeholder={`Message ${isChannel ? '#' + channel : headerTitle}`} className="flex-1 min-w-0 bg-transparent border-0 outline-none text-[14.5px] text-t1 px-1 py-2" />
+                <textarea ref={taRef} rows={1} value={input} onChange={(e) => { setInput(e.target.value); autoGrow(); }} onKeyDown={onComposerKey} placeholder={`Message ${isChannel ? '#' + channel : headerTitle}`} className="scroll flex-1 min-w-0 bg-transparent border-0 outline-none resize-none text-[14.5px] leading-relaxed text-t1 px-1 py-2 max-h-[140px]" />
                 <button type="submit" disabled={(!input.trim() && !file) || uploading} aria-label="Send" className="btn-accent w-[34px] h-[34px] rounded-[10px] flex-none">
                   {uploading ? <span className="w-[15px] h-[15px] rounded-full border-2 border-white/35 border-t-white tk-spin" /> : <Send className="w-[17px] h-[17px]" />}
                 </button>
