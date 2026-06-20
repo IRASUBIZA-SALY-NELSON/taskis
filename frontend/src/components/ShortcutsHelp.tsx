@@ -15,6 +15,8 @@ const SHORTCUTS: [string, string][] = [
   ['Esc', 'Cancel reply / close dialogs'],
   ['@', 'Mention someone'],
   [':', 'Emoji autocomplete'],
+  ['⌘ / Ctrl + /', 'Search all messages'],
+  ['⌘ B / I / E', 'Bold / italic / code the selection'],
   ['Double-click image', 'Like a post'],
   ['Drag / paste', 'Attach an image'],
 ];

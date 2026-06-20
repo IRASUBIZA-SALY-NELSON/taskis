@@ -73,6 +73,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   const lastTyping = useRef(0);
   const boundaryRef = useRef(0);
   const nextTemp = useRef(0);
+  const pendingInitial = useRef(true);
   const typingTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const isBot = channel === 'taskis-bot';
@@ -157,10 +158,14 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     setTypingUsers([]);
     nearBottomRef.current = true;
     prevLenRef.current = 0;
+    pendingInitial.current = true;
     try {
       const seen = JSON.parse(localStorage.getItem('seenAt') || '{}');
       boundaryRef.current = seen[channel] || 0;
     } catch { boundaryRef.current = 0; }
+    // restore any unsent draft for this channel
+    try { setInput(localStorage.getItem(`draft_${channel}`) || ''); } catch { setInput(''); }
+    setTimeout(() => autoGrow(), 0);
     fetch(api(`/api/chat/messages/${channel}`), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
       .then((r) => { if (r.status === 401 || r.status === 403) { localStorage.clear(); window.location.href = '/'; } return r.json(); })
       .then((d) => { setMessages(d); setLoading(false); markChannelSeen(); })
@@ -205,6 +210,18 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   useEffect(() => {
     const grew = messages.length - prevLenRef.current;
     prevLenRef.current = messages.length;
+    if (messages.length === 0) return;
+    // First render for this channel: land on the first unread, else the bottom.
+    if (pendingInitial.current) {
+      pendingInitial.current = false;
+      const b = boundaryRef.current;
+      const fu = b ? messages.find((m) => new Date(m.timestamp).getTime() > b && m.sender?.username !== user.username) : null;
+      setTimeout(() => {
+        if (fu) document.querySelector(`[data-mid="${fu.id}"]`)?.scrollIntoView({ block: 'center' });
+        else bottomRef.current?.scrollIntoView();
+      }, 60);
+      return;
+    }
     if (grew <= 0) return;
     if (nearBottomRef.current) {
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -400,6 +417,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     setMessages((prev) => [...prev, optimistic]);
     playTick();
     setInput('');
+    try { localStorage.removeItem(`draft_${channel}`); } catch { /* ignore */ }
     setReplyTo(null);
     nearBottomRef.current = true;
     if (taRef.current) taRef.current.style.height = 'auto';
@@ -509,6 +527,17 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   };
   const pickColon = (item: any) => insertColon(item.custom ? `:${item.name}:` : item.e);
 
+  const wrapSelection = (pre: string, suf: string = pre) => {
+    const ta = taRef.current;
+    if (!ta) return;
+    const s = ta.selectionStart ?? 0;
+    const e = ta.selectionEnd ?? 0;
+    const sel = input.slice(s, e) || 'text';
+    const next = input.slice(0, s) + pre + sel + suf + input.slice(e);
+    setInput(next);
+    setTimeout(() => { ta.focus(); ta.setSelectionRange(s + pre.length, s + pre.length + sel.length); autoGrow(); }, 0);
+  };
+
   const autoGrow = () => {
     const ta = taRef.current;
     if (ta) { ta.style.height = 'auto'; ta.style.height = `${Math.min(ta.scrollHeight, 140)}px`; }
@@ -526,6 +555,12 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
       if (e.key === 'ArrowUp') { e.preventDefault(); setMentionSel((s) => Math.max(s - 1, 0)); return; }
       if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); insertMention(mentionMatches[mentionSel].username); return; }
       if (e.key === 'Escape') { setMentionQuery(null); return; }
+    }
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey) {
+      const k = e.key.toLowerCase();
+      if (k === 'b') { e.preventDefault(); wrapSelection('**'); return; }
+      if (k === 'i') { e.preventDefault(); wrapSelection('_'); return; }
+      if (k === 'e') { e.preventDefault(); wrapSelection('`'); return; }
     }
     if (e.key === 'Escape' && replyTo) { setReplyTo(null); return; }
     if (e.key === 'ArrowUp' && !input.trim()) {
@@ -1055,7 +1090,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                     <EmojiGifPicker onEmoji={insertEmoji} onGif={sendGif} onClose={() => setShowComposerPicker(false)} />
                   )}
                 </div>
-                <textarea ref={taRef} rows={1} value={input} onPaste={onPaste} onChange={(e) => { const p = e.target.selectionStart ?? e.target.value.length; setInput(e.target.value); autoGrow(); notifyTyping(); detectMention(e.target.value, p); detectColon(e.target.value, p); }} onKeyDown={onComposerKey} placeholder={`Message ${isChannel ? '#' + channel : headerTitle}`} className="scroll flex-1 min-w-0 bg-transparent border-0 outline-none resize-none text-[14.5px] leading-relaxed text-t1 px-1 py-2 max-h-[140px]" />
+                <textarea ref={taRef} rows={1} value={input} onPaste={onPaste} onChange={(e) => { const v = e.target.value; const p = e.target.selectionStart ?? v.length; setInput(v); autoGrow(); notifyTyping(); detectMention(v, p); detectColon(v, p); try { if (v) localStorage.setItem(`draft_${channel}`, v); else localStorage.removeItem(`draft_${channel}`); } catch { /* ignore */ } }} onKeyDown={onComposerKey} placeholder={`Message ${isChannel ? '#' + channel : headerTitle}`} className="scroll flex-1 min-w-0 bg-transparent border-0 outline-none resize-none text-[14.5px] leading-relaxed text-t1 px-1 py-2 max-h-[140px]" />
                 <button type="submit" disabled={(!input.trim() && !file) || uploading} aria-label="Send" className="btn-accent w-[34px] h-[34px] rounded-[10px] flex-none">
                   {uploading ? <span className="w-[15px] h-[15px] rounded-full border-2 border-white/35 border-t-white tk-spin" /> : <Send className="w-[17px] h-[17px]" />}
                 </button>

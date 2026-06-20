@@ -348,6 +348,19 @@ export default function PostsFeed({ user, onToggleSidebar }: { user: any; onTogg
     setPreview(f ? URL.createObjectURL(f) : null);
   };
 
+  const onComposerPaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const it of Array.from(items)) {
+      if (it.type.startsWith('image/')) { const f = it.getAsFile(); if (f) { pickFile(f); e.preventDefault(); } return; }
+    }
+  };
+  const onComposerDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const f = e.dataTransfer.files?.[0];
+    if (f && f.type.startsWith('image/')) pickFile(f);
+  };
+
   const insertEmoji = (e: string) => {
     const ta = capRef.current;
     const pos = ta?.selectionStart ?? caption.length;
@@ -411,11 +424,11 @@ export default function PostsFeed({ user, onToggleSidebar }: { user: any; onTogg
 
         <div className="max-w-[560px] mx-auto px-4 py-6 flex flex-col gap-5">
           {/* composer */}
-          <div className="card p-4">
+          <div className="card p-4" onDragOver={(e) => e.preventDefault()} onDrop={onComposerDrop}>
             <div className="flex items-start gap-3">
               <Avatar u={user} />
               <div className="flex-1 min-w-0">
-                <textarea ref={capRef} value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="Share something with the team…" rows={2} className="tk-input resize-none" style={{ background: 'transparent', border: 'none', padding: '6px 0' }} />
+                <textarea ref={capRef} value={caption} onPaste={onComposerPaste} onChange={(e) => setCaption(e.target.value)} placeholder="Share something with the team…" rows={2} className="tk-input resize-none" style={{ background: 'transparent', border: 'none', padding: '6px 0' }} />
                 {(preview || gifUrl) && (
                   <div className="relative mt-2 inline-block">
                     <img src={preview || gifUrl!} alt="" className="max-h-56 rounded-xl border border-border" />
