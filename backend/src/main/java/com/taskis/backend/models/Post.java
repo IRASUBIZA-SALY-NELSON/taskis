@@ -26,6 +26,10 @@ public class Post {
     @Column(length = 8192)
     private String likedBy = "";
 
+    // Emoji reactions, stored as "emoji:user1,user2;emoji2:user3".
+    @Column(length = 8192)
+    private String reactions = "";
+
     @Temporal(TemporalType.TIMESTAMP)
     private Date createdAt = new Date();
 }

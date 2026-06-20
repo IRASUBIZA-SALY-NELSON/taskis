@@ -1,0 +1,74 @@
+'use client';
+
+import { useEffect, useRef } from 'react';
+import { subscribe } from '@/lib/ws';
+import { initNotifications, requestNotificationPermission, showNotification, playPing, getNotifyPrefs } from '@/lib/notify';
+import { displayOf } from './Sidebar';
+
+const api = (p: string) => `http://${window.location.hostname}:8080${p}`;
+const NAMED = ['general', 'intel', 'alerts', 'confidential', 'taskis-bot'];
+
+/**
+ * Global, cross-channel notifications. Subscribes to every channel the user
+ * belongs to (named channels + their DMs) so they get pinged even when the tab
+ * is backgrounded or they're looking at a different conversation/the feed.
+ * Rendered once in AppShell; renders nothing.
+ */
+export default function NotificationManager({ user }: { user: any }) {
+  const seen = useRef<Set<number>>(new Set());
+  const unread = useRef(0);
+
+  useEffect(() => {
+    initNotifications();
+    requestNotificationPermission();
+
+    const offs: Array<() => void> = [];
+    const mentionsMe = (t: string) => !!t && new RegExp(`(^|\\s)@${user.username}\\b`, 'i').test(t);
+
+    const handle = (tag: string) => (msg: any) => {
+      if (!msg || msg.id == null || seen.current.has(msg.id)) return;
+      seen.current.add(msg.id); // dedupe edits/reactions/read-receipt rebroadcasts
+      const from = msg.sender?.username;
+      if (!from || from === user.username) return;
+      const prefs = getNotifyPrefs();
+      const mention = mentionsMe(msg.content || '');
+      const name = displayOf(msg.sender);
+      if (document.hidden) {
+        unread.current += 1;
+        document.title = `(${unread.current}) Taskis`;
+        if (prefs.desktop) {
+          showNotification(mention ? `${name} mentioned you` : name, {
+            body: msg.content || 'Sent an attachment',
+            url: '/chat',
+            tag,
+          });
+        }
+        if (prefs.sound) playPing();
+      } else if (mention && prefs.sound) {
+        playPing();
+      }
+    };
+
+    NAMED.forEach((ch) => offs.push(subscribe(`/topic/${ch}`, handle(ch))));
+
+    fetch(api('/api/chat/users'), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
+      .then((r) => r.json())
+      .then((users) => {
+        if (!Array.isArray(users)) return;
+        users
+          .filter((u) => u.username !== user.username && u.username !== 'Taskis Bot')
+          .forEach((op) => {
+            const ids = [user.id, op.id].sort((a: number, b: number) => a - b);
+            const ch = `dm_${ids[0]}_${ids[1]}`;
+            offs.push(subscribe(`/topic/${ch}`, handle(ch)));
+          });
+      })
+      .catch(() => {});
+
+    const onFocus = () => { unread.current = 0; document.title = 'Taskis'; };
+    window.addEventListener('focus', onFocus);
+    return () => { offs.forEach((f) => f()); window.removeEventListener('focus', onFocus); };
+  }, [user.id, user.username]);
+
+  return null;
+}

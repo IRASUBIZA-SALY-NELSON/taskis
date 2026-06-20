@@ -80,7 +80,7 @@ export default function AuthScreen() {
       if (data.status === 'AUTHENTICATED') {
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
-        router.push('/chat');
+        router.push('/feed');
       }
     } catch (err: any) {
       setError(err.message || 'Registration failed');
@@ -103,7 +103,7 @@ export default function AuthScreen() {
       if (data.status === 'AUTHENTICATED') {
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
-        router.push('/chat');
+        router.push('/feed');
       }
     } catch (err: any) {
       setError(err.message || 'Login failed');

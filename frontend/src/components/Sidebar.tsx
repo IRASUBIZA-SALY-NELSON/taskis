@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Hash, Lock, Shield, LogOut, Newspaper } from 'lucide-react';
+import { Hash, Lock, Shield, LogOut, Newspaper, Search } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import ThemeToggle from './ThemeToggle';
 import SettingsMenu from './SettingsMenu';
@@ -121,8 +121,20 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
         <Lock className="w-[11px] h-[11px] text-t3" />
       </div>
 
+      {/* quick search */}
+      <div className="px-2 pt-2.5">
+        <button
+          onClick={() => window.dispatchEvent(new Event('open-command-palette'))}
+          className="w-full flex items-center gap-2 rounded-lg px-[9px] py-2 text-sm text-t3 bg-surface-2 border border-border hover:border-border-strong hover:text-t2 transition-colors"
+        >
+          <Search className="w-[14px] h-[14px]" />
+          <span className="flex-1 text-left">Search…</span>
+          <span className="text-[10px] border border-border rounded px-1.5 py-0.5">⌘K</span>
+        </button>
+      </div>
+
       {/* lists */}
-      <div className="scroll flex-1 overflow-y-auto px-2 py-2.5">
+      <div className="scroll flex-1 overflow-y-auto px-2 pt-1.5 pb-2.5">
         <button onClick={() => setActiveChannel('__posts__')} className={itemCls(activeChannel === '__posts__')}>
           <Newspaper className="w-[15px] h-[15px] flex-none" style={{ color: activeChannel === '__posts__' ? 'var(--accent-text)' : 'var(--t3)' }} />
           <span className="flex-1 text-sm font-medium">Feed</span>
@@ -156,9 +168,9 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
           const src = avatarSrc(op);
           return (
             <button key={op.id} onClick={() => setActiveChannel(channelId)} className={itemCls(active)}>
-              <span className="relative w-[25px] h-[25px] rounded-full grid place-items-center flex-none text-[11px] font-semibold text-white" style={{ background: src ? 'transparent' : toneFor(op.username) }}>
-                {src ? <img src={src} alt="" className="w-full h-full rounded-full object-cover" /> : initials(op.username)}
-                <span className="absolute -right-px -bottom-px w-[9px] h-[9px] rounded-full" style={{ background: presenceColor(op.status), border: '2px solid var(--surface-1)' }} />
+              <span className="relative overflow-hidden w-[25px] h-[25px] rounded-full grid place-items-center flex-none text-[11px] font-semibold text-white" style={{ background: src ? 'transparent' : toneFor(op.username) }}>
+                {src ? <img src={src} alt="" className="absolute inset-0 w-full h-full object-cover" /> : initials(op.username)}
+                <span className="absolute -right-px -bottom-px w-[9px] h-[9px] rounded-full z-10" style={{ background: presenceColor(op.status), border: '2px solid var(--surface-1)' }} />
               </span>
               <span className="flex-1 text-sm font-medium truncate">{displayOf(op)}</span>
               {unread[channelId] && <span className="bg-accent text-on-accent text-[11px] font-semibold px-1.5 py-px rounded-full">New</span>}
@@ -173,10 +185,10 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
           <button
             onClick={() => setShowProfile(true)}
             title="Edit profile"
-            className="relative w-8 h-8 rounded-full grid place-items-center flex-none text-xs font-semibold text-white hover:opacity-80 transition-opacity"
+            className="relative overflow-hidden w-8 h-8 rounded-full grid place-items-center flex-none text-xs font-semibold text-white hover:opacity-80 transition-opacity"
             style={{ background: avatarSrc(user) ? 'transparent' : toneFor(user.username) }}
           >
-            {avatarSrc(user) ? <img src={avatarSrc(user)!} alt="" className="w-full h-full rounded-full object-cover" /> : initials(user.username)}
+            {avatarSrc(user) ? <img src={avatarSrc(user)!} alt="" className="absolute inset-0 w-full h-full object-cover" /> : initials(user.username)}
           </button>
           <button onClick={() => setShowProfile(true)} className="flex-1 min-w-0 text-left">
             <div className="text-[13.5px] font-semibold text-t1 truncate">{displayOf(user)}</div>
