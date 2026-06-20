@@ -12,7 +12,7 @@ import { renderRich } from '@/lib/rich';
 import LinkPreview, { firstUrl } from './LinkPreview';
 import { searchEmoji } from '@/lib/emoji';
 import { isMuted, toggleMute } from '@/lib/notify';
-import { Bell, BellOff } from 'lucide-react';
+import { Bell, BellOff, ArrowDown } from 'lucide-react';
 
 interface ChatAreaProps { user: any; channel: string; onToggleSidebar: () => void; }
 
@@ -56,6 +56,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   const [showComposerPicker, setShowComposerPicker] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [muteVer, setMuteVer] = useState(0);
+  const [farUp, setFarUp] = useState(false);
   const mediaRecRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const recTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -211,6 +212,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     if (!el) return;
     const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
     nearBottomRef.current = dist < 120;
+    setFarUp(dist > 500);
     if (nearBottomRef.current && newCount) setNewCount(0);
   };
 
@@ -881,6 +883,17 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
         )}
         <div ref={bottomRef} />
       </div>
+
+      {/* scroll to latest */}
+      {farUp && newCount === 0 && (
+        <button
+          onClick={() => { nearBottomRef.current = true; bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }}
+          className="absolute right-5 bottom-[88px] z-20 w-9 h-9 grid place-items-center rounded-full bg-surface border border-border-strong text-t2 hover:text-t1 shadow-[var(--shadow-md)] transition-colors"
+          aria-label="Scroll to latest"
+        >
+          <ArrowDown className="w-[16px] h-[16px]" />
+        </button>
+      )}
 
       {/* typing indicator */}
       {!isBot && typingUsers.length > 0 && (
