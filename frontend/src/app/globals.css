@@ -44,7 +44,7 @@
 
   --edge-hi: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 
-  --wash: radial-gradient(1100px 520px at 50% -14%, rgba(217, 119, 87, 0.06), transparent 62%);
+  --wash: linear-gradient(135deg, rgba(217, 119, 87, 0.07), transparent 44%), linear-gradient(305deg, rgba(95, 145, 115, 0.06), transparent 48%);
 
   /* warm editorial serif for the wordmark + display headings */
   --font-serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
@@ -89,7 +89,7 @@
 
   --edge-hi: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 
-  --wash: radial-gradient(1100px 520px at 50% -14%, rgba(196, 95, 63, 0.06), transparent 62%);
+  --wash: linear-gradient(135deg, rgba(214, 140, 80, 0.16), transparent 42%), linear-gradient(305deg, rgba(120, 165, 130, 0.18), transparent 46%);
 
   color-scheme: light;
 }
@@ -233,8 +233,17 @@ textarea:focus-visible {
 .card {
   background: var(--surface-1);
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 18px;
   box-shadow: var(--shadow-sm), var(--edge-hi);
+}
+
+/* Floating app frame (Dribbble-style): the whole app as a rounded card on the gradient canvas */
+.app-frame {
+  background: var(--surface-1);
+  box-shadow: var(--shadow-lg), var(--edge-hi);
+}
+@media (min-width: 1024px) {
+  .app-frame { border: 1px solid var(--border); border-radius: 26px; }
 }
 
 .tk-input {

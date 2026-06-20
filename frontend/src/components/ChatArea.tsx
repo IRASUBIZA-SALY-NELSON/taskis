@@ -870,7 +870,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                       <div>
                         <div
                           className={`px-[13px] py-[9px] text-[14.5px] leading-relaxed border border-border whitespace-pre-wrap break-words ${isDeleted ? 'opacity-50 italic text-t2' : 'text-t1'}`}
-                          style={{ background: isMe ? 'var(--bubble-own)' : 'var(--bubble-other)', borderRadius: isMe ? '15px 5px 15px 15px' : '5px 15px 15px 15px' }}
+                          style={{ background: isMe ? 'var(--bubble-own)' : 'var(--bubble-other)', borderRadius: isMe ? '20px 7px 20px 20px' : '7px 20px 20px 20px' }}
                         >
                           {msg.content && <span>{isDeleted ? msg.content : (searchActive ? highlight(msg.content, search.trim()) : renderContent(msg.content))}</span>}
                           {!isDeleted && !msg.attachmentUrl && firstUrl(msg.content) && <LinkPreview url={firstUrl(msg.content)!} />}
@@ -1053,7 +1053,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                   )}
                 </div>
               )}
-              <form onSubmit={send} className="relative flex items-center gap-1.5 rounded-[14px] border border-border-strong bg-surface-2 p-1.5">
+              <form onSubmit={send} className="relative flex items-end gap-1.5 rounded-[22px] border border-border-strong bg-surface-2 p-1.5">
                 {colonQuery !== null && emojiMatches.length > 0 && (
                   <div className="card absolute bottom-full mb-2 left-0 p-1.5 flex gap-1 z-50" style={{ boxShadow: 'var(--shadow-lg), var(--edge-hi)' }}>
                     {emojiMatches.map((item, i) => (
@@ -1091,7 +1091,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                   )}
                 </div>
                 <textarea ref={taRef} rows={1} value={input} onPaste={onPaste} onChange={(e) => { const v = e.target.value; const p = e.target.selectionStart ?? v.length; setInput(v); autoGrow(); notifyTyping(); detectMention(v, p); detectColon(v, p); try { if (v) localStorage.setItem(`draft_${channel}`, v); else localStorage.removeItem(`draft_${channel}`); } catch { /* ignore */ } }} onKeyDown={onComposerKey} placeholder={`Message ${isChannel ? '#' + channel : headerTitle}`} className="scroll flex-1 min-w-0 bg-transparent border-0 outline-none resize-none text-[14.5px] leading-relaxed text-t1 px-1 py-2 max-h-[140px]" />
-                <button type="submit" disabled={(!input.trim() && !file) || uploading} aria-label="Send" className="btn-accent w-[34px] h-[34px] rounded-[10px] flex-none">
+                <button type="submit" disabled={(!input.trim() && !file) || uploading} aria-label="Send" className="btn-accent w-[36px] h-[36px] rounded-full flex-none">
                   {uploading ? <span className="w-[15px] h-[15px] rounded-full border-2 border-white/35 border-t-white tk-spin" /> : <Send className="w-[17px] h-[17px]" />}
                 </button>
               </form>

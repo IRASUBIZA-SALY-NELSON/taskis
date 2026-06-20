@@ -46,27 +46,29 @@ export default function AppShell({ initialChannel = 'general' }: { initialChanne
 
   return (
     <MotionConfig reducedMotion="user">
-    <div className="flex h-screen overflow-hidden">
       <NotificationManager user={user} />
       <CommandPalette user={user} onNavigate={setActiveChannel} />
       <GlobalSearch onNavigate={setActiveChannel} />
       <ShortcutsHelp />
-      <Sidebar
-        user={user}
-        activeChannel={activeChannel}
-        setActiveChannel={setActiveChannel}
-        isOpen={isSidebarOpen}
-        setIsOpen={setIsSidebarOpen}
-      />
+      <div className="h-screen w-full overflow-hidden lg:p-3">
+        <div className="app-frame flex h-full w-full overflow-hidden">
+          <Sidebar
+            user={user}
+            activeChannel={activeChannel}
+            setActiveChannel={setActiveChannel}
+            isOpen={isSidebarOpen}
+            setIsOpen={setIsSidebarOpen}
+          />
 
-      <main className="flex-1 flex flex-col relative h-full min-w-0 bg-bg">
-        {activeChannel === '__posts__' ? (
-          <PostsFeed user={user} onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
-        ) : (
-          <ChatArea user={user} channel={activeChannel} onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
-        )}
-      </main>
-    </div>
+          <main className="flex-1 flex flex-col relative h-full min-w-0 bg-bg">
+            {activeChannel === '__posts__' ? (
+              <PostsFeed user={user} onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
+            ) : (
+              <ChatArea user={user} channel={activeChannel} onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
+            )}
+          </main>
+        </div>
+      </div>
     </MotionConfig>
   );
 }
