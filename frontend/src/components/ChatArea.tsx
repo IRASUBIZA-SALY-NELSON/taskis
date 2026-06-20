@@ -11,6 +11,7 @@ import { useToast } from './Toast';
 import { renderRich } from '@/lib/rich';
 import LinkPreview, { firstUrl } from './LinkPreview';
 import HoverCard from './HoverCard';
+import VoiceNote from './VoiceNote';
 import { searchEmoji } from '@/lib/emoji';
 import { useCustomEmojis } from '@/lib/customEmoji';
 import { isMuted, toggleMute, playTick } from '@/lib/notify';
@@ -657,12 +658,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
       );
     }
     if (msg.attachmentType?.startsWith('audio/')) {
-      return (
-        <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-border w-[282px] max-w-full mt-1.5" style={{ background: mine ? 'var(--bubble-own)' : 'var(--surface-2)' }}>
-          <span className="w-[30px] h-[30px] rounded-full bg-accent-soft text-accent-text grid place-items-center flex-none"><Mic className="w-[15px] h-[15px]" /></span>
-          <audio controls src={full} className="flex-1 min-w-0 h-9" style={{ maxWidth: 210 }} />
-        </div>
-      );
+      return <VoiceNote src={full} mine={mine} />;
     }
     return (
       <div className="flex items-center gap-[11px] px-3 py-2.5 rounded-xl border border-border w-[264px] max-w-full mt-1.5" style={{ background: mine ? 'var(--bubble-own)' : 'var(--surface-2)' }}>
