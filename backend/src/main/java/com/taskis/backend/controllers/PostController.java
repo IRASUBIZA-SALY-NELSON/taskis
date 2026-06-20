@@ -88,12 +88,20 @@ public class PostController {
     }
 
     @GetMapping
-    public ResponseEntity<?> list(Principal principal) {
+    public ResponseEntity<?> list(
+            @RequestParam(required = false) Long beforeId,
+            @RequestParam(defaultValue = "10") int limit,
+            Principal principal) {
         if (principal == null) return ResponseEntity.status(401).body("Unauthorized");
         String me = principal.getName();
+        int cap = Math.min(Math.max(limit, 1), 30);
         Date cutoff = new Date(System.currentTimeMillis() - ScheduledTasks.POST_TTL_MS);
         List<Map<String, Object>> out = new ArrayList<>();
-        for (Post p : postRepository.findByCreatedAtAfterOrderByCreatedAtDesc(cutoff)) out.add(postDto(p, me));
+        for (Post p : postRepository.findByCreatedAtAfterOrderByCreatedAtDesc(cutoff)) {
+            if (beforeId != null && p.getId() >= beforeId) continue; // older than the cursor only
+            out.add(postDto(p, me));
+            if (out.size() >= cap) break;
+        }
         return ResponseEntity.ok(out);
     }
 
@@ -131,6 +139,7 @@ public class PostController {
             return ResponseEntity.status(403).body("Forbidden");
         }
         commentRepository.deleteByPostId(id);
+        ScheduledTasks.deleteUploadedImage(p.getImageUrl());
         postRepository.delete(p);
         broadcast("deleted", Map.of("id", id));
         return ResponseEntity.ok(Map.of("removed", true));

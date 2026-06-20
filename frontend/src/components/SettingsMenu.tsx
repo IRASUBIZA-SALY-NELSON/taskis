@@ -54,7 +54,7 @@ export default function SettingsMenu() {
         <Settings className="w-[15px] h-[15px]" />
       </button>
       {open && (
-        <div className="card absolute bottom-full right-0 mb-2 w-[248px] py-1.5 z-50" style={{ boxShadow: 'var(--shadow-lg), var(--edge-hi)' }}>
+        <div className="card absolute bottom-full left-0 mb-2 w-[248px] max-w-[calc(100vw-32px)] py-1.5 z-50" style={{ boxShadow: 'var(--shadow-lg), var(--edge-hi)' }}>
           <div className="eyebrow px-3 py-1.5">Notifications</div>
           <div className="flex items-center justify-between px-3 py-1.5">
             <span className="text-[13.5px] text-t1">Desktop alerts</span>

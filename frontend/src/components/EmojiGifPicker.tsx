@@ -11,10 +11,11 @@ interface Props {
   onGif?: (url: string) => void;
   onClose: () => void;
   align?: 'left' | 'right';
+  vertical?: 'up' | 'down';
   reactMode?: boolean; // hide GIF tab (reactions are emoji-only)
 }
 
-export default function EmojiGifPicker({ onEmoji, onGif, onClose, align = 'left', reactMode = false }: Props) {
+export default function EmojiGifPicker({ onEmoji, onGif, onClose, align = 'left', vertical = 'up', reactMode = false }: Props) {
   const [tab, setTab] = useState<'emoji' | 'gif'>('emoji');
   const [q, setQ] = useState('');
   const [gifs, setGifs] = useState<{ id: string; url: string; preview: string }[]>([]);
@@ -56,7 +57,7 @@ export default function EmojiGifPicker({ onEmoji, onGif, onClose, align = 'left'
   return (
     <div
       ref={ref}
-      className={`card absolute z-50 bottom-full mb-1.5 ${align === 'right' ? 'right-0' : 'left-0'} w-[300px] overflow-hidden`}
+      className={`card absolute z-50 ${vertical === 'down' ? 'top-full mt-1.5' : 'bottom-full mb-1.5'} ${align === 'right' ? 'right-0' : 'left-0'} w-[300px] max-w-[calc(100vw-32px)] overflow-hidden`}
       style={{ boxShadow: 'var(--shadow-lg), var(--edge-hi)' }}
       onClick={(e) => e.stopPropagation()}
     >
