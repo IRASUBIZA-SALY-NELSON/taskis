@@ -76,8 +76,12 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   const isBot = channel === 'taskis-bot';
   const isDm = channel.startsWith('dm_');
   const isChannel = !isBot && !isDm;
-  const headerTitle = isBot ? 'Taskis Bot' : isDm ? 'Direct message' : channel;
-  const headerSub = isBot ? 'Automated · read-only' : 'End-to-end encrypted';
+  const dmPartner = isDm
+    ? (() => { const ids = channel.split('_').slice(1).map(Number); const pid = ids.find((id) => id !== user.id); return members.find((m) => m.id === pid) || null; })()
+    : null;
+  const dmPresence = dmPartner?.status === 'ACTIVE' ? 'Active now' : dmPartner?.status === 'AWAY' ? 'Away' : 'Offline';
+  const headerTitle = isBot ? 'Taskis Bot' : isDm ? (dmPartner ? displayOf(dmPartner) : 'Direct message') : channel;
+  const headerSub = isBot ? 'Automated · read-only' : isDm && dmPartner ? dmPresence : 'End-to-end encrypted';
 
   const fetchMsgs = () =>
     fetch(api(`/api/chat/messages/${channel}`), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
@@ -207,6 +211,13 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
       setNewCount((c) => c + grew);
     }
   }, [messages.length]);
+
+  // Auto-focus the composer when opening a conversation (desktop only).
+  useEffect(() => {
+    if (isBot || typeof window === 'undefined' || window.innerWidth < 1024) return;
+    const t = setTimeout(() => taRef.current?.focus(), 120);
+    return () => clearTimeout(t);
+  }, [channel, isBot]);
 
   const onScroll = () => {
     const el = scrollRef.current;
@@ -635,7 +646,12 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
         <button onClick={onToggleSidebar} className="icon-btn w-8 h-8 lg:hidden" aria-label="Toggle sidebar"><Menu className="w-[15px] h-[15px]" /></button>
         {isChannel && <span className="text-[22px] font-medium text-t3 leading-none">#</span>}
         {isBot && <span className="w-[30px] h-[30px] rounded-lg bg-accent-soft text-accent-text text-[13px] font-bold grid place-items-center flex-none">TB</span>}
-        {isDm && <span className="w-[30px] h-[30px] rounded-full grid place-items-center flex-none text-xs font-semibold text-white" style={{ background: toneFor(channel) }}>{initials(headerTitle)}</span>}
+        {isDm && (
+          <span className="relative w-[30px] h-[30px] rounded-full grid place-items-center flex-none text-xs font-semibold text-white overflow-hidden" style={{ background: dmPartner?.avatarUrl ? 'transparent' : toneFor(dmPartner?.username || channel) }}>
+            {dmPartner?.avatarUrl ? <img src={dmPartner.avatarUrl.startsWith('http') ? dmPartner.avatarUrl : api(dmPartner.avatarUrl)} alt="" className="absolute inset-0 w-full h-full object-cover" /> : initials(headerTitle)}
+            {dmPartner && <span className="absolute -right-px -bottom-px w-2.5 h-2.5 rounded-full z-10" style={{ background: dmPartner.status === 'ACTIVE' ? 'var(--online)' : dmPartner.status === 'AWAY' ? 'var(--away)' : 'var(--t3)', border: '2px solid var(--bg)' }} />}
+          </span>
+        )}
         <div className="flex-1 min-w-0">
           <div className="text-[15.5px] font-semibold text-t1 leading-tight truncate">{headerTitle}</div>
           <div className="flex items-center gap-1.5 text-xs text-t2 mt-px"><Lock className="w-[11px] h-[11px]" />{headerSub}</div>
