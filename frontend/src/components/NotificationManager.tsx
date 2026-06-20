@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { subscribe } from '@/lib/ws';
-import { initNotifications, requestNotificationPermission, showNotification, playPing, getNotifyPrefs } from '@/lib/notify';
+import { initNotifications, requestNotificationPermission, showNotification, playPing, getNotifyPrefs, isMuted } from '@/lib/notify';
 import { displayOf } from './Sidebar';
 
 const api = (p: string) => `http://${window.location.hostname}:8080${p}`;
@@ -30,6 +30,7 @@ export default function NotificationManager({ user }: { user: any }) {
       seen.current.add(msg.id); // dedupe edits/reactions/read-receipt rebroadcasts
       const from = msg.sender?.username;
       if (!from || from === user.username) return;
+      if (isMuted(tag)) return; // channel muted — stay quiet
       const prefs = getNotifyPrefs();
       const mention = mentionsMe(msg.content || '');
       const name = displayOf(msg.sender);

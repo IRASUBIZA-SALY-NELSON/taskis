@@ -67,6 +67,18 @@ export function playPing() {
   } catch { /* ignore */ }
 }
 
+export function getMuted(): string[] {
+  if (typeof window === 'undefined') return [];
+  try { return JSON.parse(localStorage.getItem('mutedChannels') || '[]'); } catch { return []; }
+}
+export function isMuted(channel: string) { return getMuted().includes(channel); }
+export function toggleMute(channel: string) {
+  const set = new Set(getMuted());
+  if (set.has(channel)) set.delete(channel); else set.add(channel);
+  try { localStorage.setItem('mutedChannels', JSON.stringify([...set])); } catch { /* ignore */ }
+  return set.has(channel);
+}
+
 const KEY = 'notifyPrefs';
 export function getNotifyPrefs() {
   if (typeof window === 'undefined') return { sound: true, desktop: true };

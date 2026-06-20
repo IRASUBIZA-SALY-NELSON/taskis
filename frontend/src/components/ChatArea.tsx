@@ -11,6 +11,8 @@ import { useToast } from './Toast';
 import { renderRich } from '@/lib/rich';
 import LinkPreview, { firstUrl } from './LinkPreview';
 import { searchEmoji } from '@/lib/emoji';
+import { isMuted, toggleMute } from '@/lib/notify';
+import { Bell, BellOff } from 'lucide-react';
 
 interface ChatAreaProps { user: any; channel: string; onToggleSidebar: () => void; }
 
@@ -53,6 +55,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   const [recSeconds, setRecSeconds] = useState(0);
   const [showComposerPicker, setShowComposerPicker] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [muteVer, setMuteVer] = useState(0);
   const mediaRecRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const recTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -635,6 +638,17 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
         </div>
 
         <div className="flex items-center gap-1.5 flex-none">
+          {!isBot && (
+            <button
+              onClick={() => { toggleMute(channel); setMuteVer((v) => v + 1); }}
+              className="icon-btn w-8 h-8"
+              title={isMuted(channel) ? 'Unmute notifications' : 'Mute notifications'}
+              style={isMuted(channel) ? { color: 'var(--accent-text)' } : undefined}
+              data-mutever={muteVer}
+            >
+              {isMuted(channel) ? <BellOff className="w-[15px] h-[15px]" /> : <Bell className="w-[15px] h-[15px]" />}
+            </button>
+          )}
           {showSearch && (
             <input
               autoFocus

@@ -7,6 +7,8 @@ import ChatArea from '@/components/ChatArea';
 import PostsFeed from '@/components/PostsFeed';
 import NotificationManager from '@/components/NotificationManager';
 import CommandPalette from '@/components/CommandPalette';
+import ShortcutsHelp from '@/components/ShortcutsHelp';
+import { initThemeWatcher } from '@/lib/theme';
 
 export default function AppShell({ initialChannel = 'general' }: { initialChannel?: string }) {
   const router = useRouter();
@@ -21,6 +23,8 @@ export default function AppShell({ initialChannel = 'general' }: { initialChanne
     setUser(JSON.parse(userData));
     setIsSidebarOpen(window.innerWidth >= 1024);
   }, [router]);
+
+  useEffect(() => initThemeWatcher(), []);
 
   useEffect(() => {
     if (!user) return;
@@ -42,6 +46,7 @@ export default function AppShell({ initialChannel = 'general' }: { initialChanne
     <div className="flex h-screen overflow-hidden">
       <NotificationManager user={user} />
       <CommandPalette user={user} onNavigate={setActiveChannel} />
+      <ShortcutsHelp />
       <Sidebar
         user={user}
         activeChannel={activeChannel}
