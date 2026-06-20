@@ -10,8 +10,9 @@ import EmojiGifPicker from './EmojiGifPicker';
 import { useToast } from './Toast';
 import { renderRich } from '@/lib/rich';
 import LinkPreview, { firstUrl } from './LinkPreview';
+import HoverCard from './HoverCard';
 import { searchEmoji } from '@/lib/emoji';
-import { isMuted, toggleMute } from '@/lib/notify';
+import { isMuted, toggleMute, playTick } from '@/lib/notify';
 import { Bell, BellOff, ArrowDown } from 'lucide-react';
 
 interface ChatAreaProps { user: any; channel: string; onToggleSidebar: () => void; }
@@ -373,6 +374,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
       timestamp: new Date().toISOString(), _sending: true,
     };
     setMessages((prev) => [...prev, optimistic]);
+    playTick();
     setInput('');
     setReplyTo(null);
     nearBottomRef.current = true;
@@ -774,7 +776,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                     {/* meta */}
                     {!grouped && (
                       <div className={`flex items-baseline gap-2 mb-1 ${isMe ? 'flex-row-reverse' : ''}`}>
-                        <span className="text-[13px] font-semibold text-t1">{isMe ? 'You' : displayOf(msg.sender)}</span>
+                        {isMe ? <span className="text-[13px] font-semibold text-t1">You</span> : <HoverCard user={msg.sender} className="text-[13px] font-semibold text-t1 cursor-default hover:underline decoration-border">{displayOf(msg.sender)}</HoverCard>}
                         <span className="text-[11px] text-t3" title={new Date(msg.timestamp).toLocaleString()}>{fmt(msg.timestamp)}</span>
                         {msg.edited && !isDeleted && <span className="text-[11px] text-t3 italic">edited</span>}
                         {msg.pinned && <Pin className="w-[11px] h-[11px] text-accent-text" />}

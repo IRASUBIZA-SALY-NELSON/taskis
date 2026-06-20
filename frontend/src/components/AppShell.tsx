@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { MotionConfig } from 'framer-motion';
 import Sidebar from '@/components/Sidebar';
 import ChatArea from '@/components/ChatArea';
 import PostsFeed from '@/components/PostsFeed';
@@ -43,6 +44,7 @@ export default function AppShell({ initialChannel = 'general' }: { initialChanne
   if (!user) return <div className="min-h-screen flex items-center justify-center text-t2 text-sm">Establishing secure connection…</div>;
 
   return (
+    <MotionConfig reducedMotion="user">
     <div className="flex h-screen overflow-hidden">
       <NotificationManager user={user} />
       <CommandPalette user={user} onNavigate={setActiveChannel} />
@@ -63,5 +65,6 @@ export default function AppShell({ initialChannel = 'general' }: { initialChanne
         )}
       </main>
     </div>
+    </MotionConfig>
   );
 }
