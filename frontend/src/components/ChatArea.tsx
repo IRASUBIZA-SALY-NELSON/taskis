@@ -10,6 +10,7 @@ import EmojiGifPicker from './EmojiGifPicker';
 import { useToast } from './Toast';
 import { renderRich } from '@/lib/rich';
 import LinkPreview, { firstUrl } from './LinkPreview';
+import { searchEmoji } from '@/lib/emoji';
 
 interface ChatAreaProps { user: any; channel: string; onToggleSidebar: () => void; }
 
@@ -40,6 +41,8 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   const [members, setMembers] = useState<any[]>([]);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionSel, setMentionSel] = useState(0);
+  const [colonQuery, setColonQuery] = useState<string | null>(null);
+  const [colonSel, setColonSel] = useState(0);
   const [search, setSearch] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [savedActive, setSavedActive] = useState(false);
@@ -320,10 +323,23 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     deliver({ content: m.content, channel, attachmentUrl: m.attachmentUrl, attachmentType: m.attachmentType, replyToId: m.replyTo?.id ?? null }, m.id);
   };
 
+  const applySlash = (raw: string) => {
+    const cmds: Record<string, string> = {
+      '/shrug': '¯\\_(ツ)_/¯',
+      '/tableflip': '(╯°□°)╯︵ ┻━┻',
+      '/unflip': '┬─┬ ノ( ゜-゜ノ)',
+    };
+    for (const cmd of Object.keys(cmds)) {
+      if (raw === cmd) return cmds[cmd];
+      if (raw.startsWith(cmd + ' ')) return `${raw.slice(cmd.length + 1)} ${cmds[cmd]}`.trim();
+    }
+    return raw;
+  };
+
   const send = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() && !file) return;
-    const text = input;
+    const text = applySlash(input);
     const replySnapshot = replyTo;
 
     let attachmentUrl: string | null = null;
@@ -445,12 +461,34 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     }, 0);
   };
 
+  const detectColon = (val: string, pos: number) => {
+    const m = val.slice(0, pos).match(/(?:^|\s):([a-z0-9_+-]{2,})$/i);
+    setColonQuery(m ? m[1] : null);
+    setColonSel(0);
+  };
+
+  const insertColon = (emoji: string) => {
+    const ta = taRef.current;
+    const pos = ta?.selectionStart ?? input.length;
+    const upto = input.slice(0, pos).replace(/(^|\s):([a-z0-9_+-]{2,})$/i, `$1${emoji} `);
+    const next = upto + input.slice(pos);
+    setInput(next);
+    setColonQuery(null);
+    setTimeout(() => { if (ta) { ta.focus(); ta.setSelectionRange(upto.length, upto.length); autoGrow(); } }, 0);
+  };
+
   const autoGrow = () => {
     const ta = taRef.current;
     if (ta) { ta.style.height = 'auto'; ta.style.height = `${Math.min(ta.scrollHeight, 140)}px`; }
   };
 
   const onComposerKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (colonQuery !== null && emojiMatches.length) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setColonSel((s) => Math.min(s + 1, emojiMatches.length - 1)); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setColonSel((s) => Math.max(s - 1, 0)); return; }
+      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); insertColon(emojiMatches[colonSel]); return; }
+      if (e.key === 'Escape') { setColonQuery(null); return; }
+    }
     if (mentionQuery !== null && mentionMatches.length) {
       if (e.key === 'ArrowDown') { e.preventDefault(); setMentionSel((s) => Math.min(s + 1, mentionMatches.length - 1)); return; }
       if (e.key === 'ArrowUp') { e.preventDefault(); setMentionSel((s) => Math.max(s - 1, 0)); return; }
@@ -519,6 +557,8 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   const mentionMatches = mentionQuery === null ? [] : members
     .filter((m) => m.username && m.username !== 'Taskis Bot' && m.username.toLowerCase().startsWith(mentionQuery.toLowerCase()))
     .slice(0, 6);
+
+  const emojiMatches = colonQuery === null ? [] : searchEmoji(colonQuery).slice(0, 9);
 
   const firstUnreadId = (() => {
     const b = boundaryRef.current;
@@ -913,6 +953,13 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                 </div>
               )}
               <form onSubmit={send} className="relative flex items-center gap-1.5 rounded-[14px] border border-border-strong bg-surface-2 p-1.5">
+                {colonQuery !== null && emojiMatches.length > 0 && (
+                  <div className="card absolute bottom-full mb-2 left-0 p-1.5 flex gap-1 z-50" style={{ boxShadow: 'var(--shadow-lg), var(--edge-hi)' }}>
+                    {emojiMatches.map((em, i) => (
+                      <button type="button" key={em} onMouseDown={(e) => { e.preventDefault(); insertColon(em); }} onMouseEnter={() => setColonSel(i)} className="text-xl p-1 rounded-md transition-colors" style={i === colonSel ? { background: 'var(--hover)' } : undefined}>{em}</button>
+                    ))}
+                  </div>
+                )}
                 {mentionQuery !== null && mentionMatches.length > 0 && (
                   <div className="card absolute bottom-full mb-2 left-0 w-[240px] py-1 z-50" style={{ boxShadow: 'var(--shadow-lg), var(--edge-hi)' }}>
                     {mentionMatches.map((m, i) => (
@@ -940,7 +987,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                     <EmojiGifPicker onEmoji={insertEmoji} onGif={sendGif} onClose={() => setShowComposerPicker(false)} />
                   )}
                 </div>
-                <textarea ref={taRef} rows={1} value={input} onPaste={onPaste} onChange={(e) => { setInput(e.target.value); autoGrow(); notifyTyping(); detectMention(e.target.value, e.target.selectionStart ?? e.target.value.length); }} onKeyDown={onComposerKey} placeholder={`Message ${isChannel ? '#' + channel : headerTitle}`} className="scroll flex-1 min-w-0 bg-transparent border-0 outline-none resize-none text-[14.5px] leading-relaxed text-t1 px-1 py-2 max-h-[140px]" />
+                <textarea ref={taRef} rows={1} value={input} onPaste={onPaste} onChange={(e) => { const p = e.target.selectionStart ?? e.target.value.length; setInput(e.target.value); autoGrow(); notifyTyping(); detectMention(e.target.value, p); detectColon(e.target.value, p); }} onKeyDown={onComposerKey} placeholder={`Message ${isChannel ? '#' + channel : headerTitle}`} className="scroll flex-1 min-w-0 bg-transparent border-0 outline-none resize-none text-[14.5px] leading-relaxed text-t1 px-1 py-2 max-h-[140px]" />
                 <button type="submit" disabled={(!input.trim() && !file) || uploading} aria-label="Send" className="btn-accent w-[34px] h-[34px] rounded-[10px] flex-none">
                   {uploading ? <span className="w-[15px] h-[15px] rounded-full border-2 border-white/35 border-t-white tk-spin" /> : <Send className="w-[17px] h-[17px]" />}
                 </button>
