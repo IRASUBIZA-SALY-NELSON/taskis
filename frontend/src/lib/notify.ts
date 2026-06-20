@@ -48,7 +48,7 @@ export async function showNotification(title: string, opts: PushOpts = {}) {
 }
 
 let audioCtx: AudioContext | null = null;
-export function playPing() {
+function blip(freq: number, peak: number, dur: number) {
   if (typeof window === 'undefined') return;
   try {
     const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -58,13 +58,30 @@ export function playPing() {
     const o = ctx.createOscillator();
     const g = ctx.createGain();
     o.connect(g); g.connect(ctx.destination);
-    o.frequency.value = 660;
+    o.frequency.value = freq;
     g.gain.setValueAtTime(0.0001, ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.06, ctx.currentTime + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.25);
+    g.gain.exponentialRampToValueAtTime(peak, ctx.currentTime + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
     o.start();
-    o.stop(ctx.currentTime + 0.26);
+    o.stop(ctx.currentTime + dur + 0.02);
   } catch { /* ignore */ }
+}
+
+/** Incoming-message / mention cue. */
+export function playPing() { blip(660, 0.06, 0.25); }
+/** Subtle outgoing "sent" tick (only if sound is enabled). */
+export function playTick() { if (getNotifyPrefs().sound) blip(880, 0.025, 0.09); }
+
+export function getMuted(): string[] {
+  if (typeof window === 'undefined') return [];
+  try { return JSON.parse(localStorage.getItem('mutedChannels') || '[]'); } catch { return []; }
+}
+export function isMuted(channel: string) { return getMuted().includes(channel); }
+export function toggleMute(channel: string) {
+  const set = new Set(getMuted());
+  if (set.has(channel)) set.delete(channel); else set.add(channel);
+  try { localStorage.setItem('mutedChannels', JSON.stringify([...set])); } catch { /* ignore */ }
+  return set.has(channel);
 }
 
 const KEY = 'notifyPrefs';

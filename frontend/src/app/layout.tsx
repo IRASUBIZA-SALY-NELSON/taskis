@@ -34,11 +34,10 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `
               try {
-                if (localStorage.theme === 'dark') {
-                  document.documentElement.classList.remove('light');
-                } else {
-                  document.documentElement.classList.add('light');
-                }
+                var t = localStorage.theme;
+                var dark = t === 'dark' || (t === 'system' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+                if (dark) document.documentElement.classList.remove('light');
+                else document.documentElement.classList.add('light');
                 var fs = localStorage.fontStack;
                 if (fs) document.documentElement.style.setProperty('--font-user', fs);
               } catch (_) {}

@@ -2,12 +2,20 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Send, Paperclip, FileText, Download, Lock, Menu, X, AlertCircle, MessageSquare, MoreVertical, Reply, Pencil, Trash2, SmilePlus, CheckCheck, Search, Pin, Bookmark, BookmarkCheck, Mic, Square, Smile } from 'lucide-react';
+import { Send, Paperclip, FileText, Download, Lock, Menu, X, AlertCircle, MessageSquare, MoreVertical, Reply, Pencil, Trash2, SmilePlus, CheckCheck, Search, Pin, Bookmark, BookmarkCheck, Mic, Square, Smile, Copy } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { initials, toneFor, displayOf } from './Sidebar';
 import { subscribe, publish } from '@/lib/ws';
 import EmojiGifPicker from './EmojiGifPicker';
 import { useToast } from './Toast';
+import { renderRich } from '@/lib/rich';
+import LinkPreview, { firstUrl } from './LinkPreview';
+import HoverCard from './HoverCard';
+import VoiceNote from './VoiceNote';
+import { searchEmoji } from '@/lib/emoji';
+import { useCustomEmojis } from '@/lib/customEmoji';
+import { isMuted, toggleMute, playTick } from '@/lib/notify';
+import { Bell, BellOff, ArrowDown } from 'lucide-react';
 
 interface ChatAreaProps { user: any; channel: string; onToggleSidebar: () => void; }
 
@@ -16,6 +24,7 @@ const authH = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}`,
 
 export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaProps) {
   const { confirm, toast } = useToast();
+  const { map: customMap } = useCustomEmojis();
   const [messages, setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [input, setInput] = useState('');
@@ -38,6 +47,8 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   const [members, setMembers] = useState<any[]>([]);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionSel, setMentionSel] = useState(0);
+  const [colonQuery, setColonQuery] = useState<string | null>(null);
+  const [colonSel, setColonSel] = useState(0);
   const [search, setSearch] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [savedActive, setSavedActive] = useState(false);
@@ -48,6 +59,8 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   const [recSeconds, setRecSeconds] = useState(0);
   const [showComposerPicker, setShowComposerPicker] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [muteVer, setMuteVer] = useState(0);
+  const [farUp, setFarUp] = useState(false);
   const mediaRecRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const recTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -61,13 +74,18 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   const lastTyping = useRef(0);
   const boundaryRef = useRef(0);
   const nextTemp = useRef(0);
+  const pendingInitial = useRef(true);
   const typingTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const isBot = channel === 'taskis-bot';
   const isDm = channel.startsWith('dm_');
   const isChannel = !isBot && !isDm;
-  const headerTitle = isBot ? 'Taskis Bot' : isDm ? 'Direct message' : channel;
-  const headerSub = isBot ? 'Automated · read-only' : 'End-to-end encrypted';
+  const dmPartner = isDm
+    ? (() => { const ids = channel.split('_').slice(1).map(Number); const pid = ids.find((id) => id !== user.id); return members.find((m) => m.id === pid) || null; })()
+    : null;
+  const dmPresence = dmPartner?.status === 'ACTIVE' ? 'Active now' : dmPartner?.status === 'AWAY' ? 'Away' : 'Offline';
+  const headerTitle = isBot ? 'Taskis Bot' : isDm ? (dmPartner ? displayOf(dmPartner) : 'Direct message') : channel;
+  const headerSub = isBot ? 'Automated · read-only' : isDm && dmPartner ? dmPresence : 'End-to-end encrypted';
 
   const fetchMsgs = () =>
     fetch(api(`/api/chat/messages/${channel}`), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
@@ -141,10 +159,14 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     setTypingUsers([]);
     nearBottomRef.current = true;
     prevLenRef.current = 0;
+    pendingInitial.current = true;
     try {
       const seen = JSON.parse(localStorage.getItem('seenAt') || '{}');
       boundaryRef.current = seen[channel] || 0;
     } catch { boundaryRef.current = 0; }
+    // restore any unsent draft for this channel
+    try { setInput(localStorage.getItem(`draft_${channel}`) || ''); } catch { setInput(''); }
+    setTimeout(() => autoGrow(), 0);
     fetch(api(`/api/chat/messages/${channel}`), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
       .then((r) => { if (r.status === 401 || r.status === 403) { localStorage.clear(); window.location.href = '/'; } return r.json(); })
       .then((d) => { setMessages(d); setLoading(false); markChannelSeen(); })
@@ -189,6 +211,18 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   useEffect(() => {
     const grew = messages.length - prevLenRef.current;
     prevLenRef.current = messages.length;
+    if (messages.length === 0) return;
+    // First render for this channel: land on the first unread, else the bottom.
+    if (pendingInitial.current) {
+      pendingInitial.current = false;
+      const b = boundaryRef.current;
+      const fu = b ? messages.find((m) => new Date(m.timestamp).getTime() > b && m.sender?.username !== user.username) : null;
+      setTimeout(() => {
+        if (fu) document.querySelector(`[data-mid="${fu.id}"]`)?.scrollIntoView({ block: 'center' });
+        else bottomRef.current?.scrollIntoView();
+      }, 60);
+      return;
+    }
     if (grew <= 0) return;
     if (nearBottomRef.current) {
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -198,11 +232,30 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     }
   }, [messages.length]);
 
+  // Auto-focus the composer when opening a conversation (desktop only).
+  useEffect(() => {
+    if (isBot || typeof window === 'undefined' || window.innerWidth < 1024) return;
+    const t = setTimeout(() => taRef.current?.focus(), 120);
+    return () => clearTimeout(t);
+  }, [channel, isBot]);
+
+  // Jump to a specific message after navigating from global search.
+  useEffect(() => {
+    let jid: string | null = null;
+    try { jid = sessionStorage.getItem('taskis-jump'); } catch { jid = null; }
+    if (!jid || !messages.some((m) => String(m.id) === jid)) return;
+    try { sessionStorage.removeItem('taskis-jump'); } catch { /* ignore */ }
+    setHighlightId(Number(jid));
+    setTimeout(() => { document.querySelector(`[data-mid="${jid}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 220);
+    setTimeout(() => setHighlightId((h) => (h === Number(jid) ? null : h)), 2000);
+  }, [messages]);
+
   const onScroll = () => {
     const el = scrollRef.current;
     if (!el) return;
     const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
     nearBottomRef.current = dist < 120;
+    setFarUp(dist > 500);
     if (nearBottomRef.current && newCount) setNewCount(0);
   };
 
@@ -318,10 +371,23 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     deliver({ content: m.content, channel, attachmentUrl: m.attachmentUrl, attachmentType: m.attachmentType, replyToId: m.replyTo?.id ?? null }, m.id);
   };
 
+  const applySlash = (raw: string) => {
+    const cmds: Record<string, string> = {
+      '/shrug': '¯\\_(ツ)_/¯',
+      '/tableflip': '(╯°□°)╯︵ ┻━┻',
+      '/unflip': '┬─┬ ノ( ゜-゜ノ)',
+    };
+    for (const cmd of Object.keys(cmds)) {
+      if (raw === cmd) return cmds[cmd];
+      if (raw.startsWith(cmd + ' ')) return `${raw.slice(cmd.length + 1)} ${cmds[cmd]}`.trim();
+    }
+    return raw;
+  };
+
   const send = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() && !file) return;
-    const text = input;
+    const text = applySlash(input);
     const replySnapshot = replyTo;
 
     let attachmentUrl: string | null = null;
@@ -350,7 +416,9 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
       timestamp: new Date().toISOString(), _sending: true,
     };
     setMessages((prev) => [...prev, optimistic]);
+    playTick();
     setInput('');
+    try { localStorage.removeItem(`draft_${channel}`); } catch { /* ignore */ }
     setReplyTo(null);
     nearBottomRef.current = true;
     if (taRef.current) taRef.current.style.height = 'auto';
@@ -372,6 +440,12 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   };
 
   const startEdit = (msg: any) => { setMenuId(null); setEditMsg(msg); setEditVal(msg.content); setTimeout(() => editRef.current?.focus(), 50); };
+
+  const copyText = async (m: any) => {
+    setMenuId(null);
+    try { await navigator.clipboard.writeText(m.content || ''); toast('Copied to clipboard', 'success'); }
+    catch { toast('Could not copy', 'error'); }
+  };
 
   const submitEdit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -416,22 +490,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
 
   const fileNameOf = (url: string) => url.split('/').pop()?.split('_').slice(1).join('_') || 'Document';
 
-  const renderContent = (text: string) =>
-    text.split(/(https?:\/\/[^\s]+|@\w+)/g).map((part, i) => {
-      if (/^https?:\/\//.test(part)) {
-        return <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="underline text-accent-text break-all hover:opacity-80">{part}</a>;
-      }
-      if (/^@\w+$/.test(part)) {
-        const name = part.slice(1);
-        const known = members.some((m) => m.username?.toLowerCase() === name.toLowerCase()) || name.toLowerCase() === user.username.toLowerCase();
-        if (!known) return <span key={i}>{part}</span>;
-        const isMe = name.toLowerCase() === user.username.toLowerCase();
-        return (
-          <span key={i} className="font-medium" style={{ color: 'var(--accent-text)', background: isMe ? 'var(--accent-soft)' : 'transparent', borderRadius: 4, padding: isMe ? '0 3px' : 0 }}>{part}</span>
-        );
-      }
-      return <span key={i}>{part}</span>;
-    });
+  const renderContent = (text: string) => renderRich(text, { members, me: user.username, custom: customMap });
 
   const detectMention = (val: string, pos: number) => {
     const upto = val.slice(0, pos);
@@ -452,17 +511,57 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     }, 0);
   };
 
+  const detectColon = (val: string, pos: number) => {
+    const m = val.slice(0, pos).match(/(?:^|\s):([a-z0-9_+-]{2,})$/i);
+    setColonQuery(m ? m[1] : null);
+    setColonSel(0);
+  };
+
+  const insertColon = (text: string) => {
+    const ta = taRef.current;
+    const pos = ta?.selectionStart ?? input.length;
+    const upto = input.slice(0, pos).replace(/(^|\s):([a-z0-9_+-]{2,})$/i, `$1${text} `);
+    const next = upto + input.slice(pos);
+    setInput(next);
+    setColonQuery(null);
+    setTimeout(() => { if (ta) { ta.focus(); ta.setSelectionRange(upto.length, upto.length); autoGrow(); } }, 0);
+  };
+  const pickColon = (item: any) => insertColon(item.custom ? `:${item.name}:` : item.e);
+
+  const wrapSelection = (pre: string, suf: string = pre) => {
+    const ta = taRef.current;
+    if (!ta) return;
+    const s = ta.selectionStart ?? 0;
+    const e = ta.selectionEnd ?? 0;
+    const sel = input.slice(s, e) || 'text';
+    const next = input.slice(0, s) + pre + sel + suf + input.slice(e);
+    setInput(next);
+    setTimeout(() => { ta.focus(); ta.setSelectionRange(s + pre.length, s + pre.length + sel.length); autoGrow(); }, 0);
+  };
+
   const autoGrow = () => {
     const ta = taRef.current;
     if (ta) { ta.style.height = 'auto'; ta.style.height = `${Math.min(ta.scrollHeight, 140)}px`; }
   };
 
   const onComposerKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (colonQuery !== null && emojiMatches.length) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setColonSel((s) => Math.min(s + 1, emojiMatches.length - 1)); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setColonSel((s) => Math.max(s - 1, 0)); return; }
+      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); pickColon(emojiMatches[colonSel]); return; }
+      if (e.key === 'Escape') { setColonQuery(null); return; }
+    }
     if (mentionQuery !== null && mentionMatches.length) {
       if (e.key === 'ArrowDown') { e.preventDefault(); setMentionSel((s) => Math.min(s + 1, mentionMatches.length - 1)); return; }
       if (e.key === 'ArrowUp') { e.preventDefault(); setMentionSel((s) => Math.max(s - 1, 0)); return; }
       if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); insertMention(mentionMatches[mentionSel].username); return; }
       if (e.key === 'Escape') { setMentionQuery(null); return; }
+    }
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey) {
+      const k = e.key.toLowerCase();
+      if (k === 'b') { e.preventDefault(); wrapSelection('**'); return; }
+      if (k === 'i') { e.preventDefault(); wrapSelection('_'); return; }
+      if (k === 'e') { e.preventDefault(); wrapSelection('`'); return; }
     }
     if (e.key === 'Escape' && replyTo) { setReplyTo(null); return; }
     if (e.key === 'ArrowUp' && !input.trim()) {
@@ -527,6 +626,11 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     .filter((m) => m.username && m.username !== 'Taskis Bot' && m.username.toLowerCase().startsWith(mentionQuery.toLowerCase()))
     .slice(0, 6);
 
+  const emojiMatches: { custom: boolean; e?: string; name?: string; url?: string }[] = colonQuery === null ? [] : [
+    ...Object.keys(customMap).filter((n) => n.includes(colonQuery.toLowerCase())).slice(0, 5).map((n) => ({ custom: true, name: n, url: customMap[n] })),
+    ...searchEmoji(colonQuery).slice(0, 8).map((e) => ({ custom: false, e })),
+  ].slice(0, 9);
+
   const firstUnreadId = (() => {
     const b = boundaryRef.current;
     if (!b || !messages.length) return null;
@@ -548,22 +652,17 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     const full = msg.attachmentUrl.startsWith('http') ? msg.attachmentUrl : api(msg.attachmentUrl);
     if (msg.attachmentType?.startsWith('image/')) {
       return (
-        <button onClick={() => setBigImage(full)} className="block w-[282px] max-w-full rounded-[14px] overflow-hidden border border-border cursor-zoom-in hover:border-border-strong transition-colors p-0 bg-transparent mt-1.5">
+        <button onClick={() => setBigImage(full)} className="block w-[282px] max-w-full rounded-[16px] overflow-hidden border border-border cursor-zoom-in hover:border-border-strong transition-colors p-0 bg-transparent mt-1.5 shadow-[var(--shadow-sm)]">
           <img src={full} alt="attachment" className="w-full max-h-[260px] object-cover block" />
         </button>
       );
     }
     if (msg.attachmentType?.startsWith('audio/')) {
-      return (
-        <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-border w-[282px] max-w-full mt-1.5" style={{ background: mine ? 'var(--bubble-own)' : 'var(--surface-2)' }}>
-          <span className="w-[30px] h-[30px] rounded-full bg-accent-soft text-accent-text grid place-items-center flex-none"><Mic className="w-[15px] h-[15px]" /></span>
-          <audio controls src={full} className="flex-1 min-w-0 h-9" style={{ maxWidth: 210 }} />
-        </div>
-      );
+      return <VoiceNote src={full} mine={mine} />;
     }
     return (
-      <div className="flex items-center gap-[11px] px-3 py-2.5 rounded-xl border border-border w-[264px] max-w-full mt-1.5" style={{ background: mine ? 'var(--bubble-own)' : 'var(--surface-2)' }}>
-        <span className="w-[34px] h-[34px] rounded-lg bg-surface-3 grid place-items-center flex-none text-t2"><FileText className="w-4 h-4" /></span>
+      <div className="flex items-center gap-[11px] px-3 py-2.5 rounded-2xl border border-border w-[264px] max-w-full mt-1.5" style={{ background: mine ? 'var(--bubble-own)' : 'var(--surface-2)' }}>
+        <span className="w-[34px] h-[34px] rounded-xl bg-surface-3 grid place-items-center flex-none text-t2"><FileText className="w-4 h-4" /></span>
         <div className="flex-1 min-w-0">
           <div className="text-[13.5px] font-medium text-t1 truncate">{fileNameOf(msg.attachmentUrl)}</div>
           <div className="text-xs text-t3 uppercase">{msg.attachmentType?.split('/')[1] || 'file'}</div>
@@ -595,13 +694,29 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
         <button onClick={onToggleSidebar} className="icon-btn w-8 h-8 lg:hidden" aria-label="Toggle sidebar"><Menu className="w-[15px] h-[15px]" /></button>
         {isChannel && <span className="text-[22px] font-medium text-t3 leading-none">#</span>}
         {isBot && <span className="w-[30px] h-[30px] rounded-lg bg-accent-soft text-accent-text text-[13px] font-bold grid place-items-center flex-none">TB</span>}
-        {isDm && <span className="w-[30px] h-[30px] rounded-full grid place-items-center flex-none text-xs font-semibold text-white" style={{ background: toneFor(channel) }}>{initials(headerTitle)}</span>}
+        {isDm && (
+          <span className="relative w-[30px] h-[30px] rounded-full grid place-items-center flex-none text-xs font-semibold text-white overflow-hidden" style={{ background: dmPartner?.avatarUrl ? 'transparent' : toneFor(dmPartner?.username || channel) }}>
+            {dmPartner?.avatarUrl ? <img src={dmPartner.avatarUrl.startsWith('http') ? dmPartner.avatarUrl : api(dmPartner.avatarUrl)} alt="" className="absolute inset-0 w-full h-full object-cover" /> : initials(headerTitle)}
+            {dmPartner && <span className="absolute -right-px -bottom-px w-2.5 h-2.5 rounded-full z-10" style={{ background: dmPartner.status === 'ACTIVE' ? 'var(--online)' : dmPartner.status === 'AWAY' ? 'var(--away)' : 'var(--t3)', border: '2px solid var(--bg)' }} />}
+          </span>
+        )}
         <div className="flex-1 min-w-0">
           <div className="text-[15.5px] font-semibold text-t1 leading-tight truncate">{headerTitle}</div>
           <div className="flex items-center gap-1.5 text-xs text-t2 mt-px"><Lock className="w-[11px] h-[11px]" />{headerSub}</div>
         </div>
 
         <div className="flex items-center gap-1.5 flex-none">
+          {!isBot && (
+            <button
+              onClick={() => { toggleMute(channel); setMuteVer((v) => v + 1); }}
+              className="icon-btn w-8 h-8"
+              title={isMuted(channel) ? 'Unmute notifications' : 'Mute notifications'}
+              style={isMuted(channel) ? { color: 'var(--accent-text)' } : undefined}
+              data-mutever={muteVer}
+            >
+              {isMuted(channel) ? <BellOff className="w-[15px] h-[15px]" /> : <Bell className="w-[15px] h-[15px]" />}
+            </button>
+          )}
           {showSearch && (
             <input
               autoFocus
@@ -725,8 +840,8 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                     {/* meta */}
                     {!grouped && (
                       <div className={`flex items-baseline gap-2 mb-1 ${isMe ? 'flex-row-reverse' : ''}`}>
-                        <span className="text-[13px] font-semibold text-t1">{isMe ? 'You' : displayOf(msg.sender)}</span>
-                        <span className="text-[11px] text-t3">{fmt(msg.timestamp)}</span>
+                        {isMe ? <span className="text-[13px] font-semibold text-t1">You</span> : <HoverCard user={msg.sender} className="text-[13px] font-semibold text-t1 cursor-default hover:underline decoration-border">{displayOf(msg.sender)}</HoverCard>}
+                        <span className="text-[11px] text-t3" title={new Date(msg.timestamp).toLocaleString()}>{fmt(msg.timestamp)}</span>
                         {msg.edited && !isDeleted && <span className="text-[11px] text-t3 italic">edited</span>}
                         {msg.pinned && <Pin className="w-[11px] h-[11px] text-accent-text" />}
                       </div>
@@ -751,15 +866,20 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                       <div>
                         <div
                           className={`px-[13px] py-[9px] text-[14.5px] leading-relaxed border border-border whitespace-pre-wrap break-words ${isDeleted ? 'opacity-50 italic text-t2' : 'text-t1'}`}
-                          style={{ background: isMe ? 'var(--bubble-own)' : 'var(--bubble-other)', borderRadius: isMe ? '15px 5px 15px 15px' : '5px 15px 15px 15px' }}
+                          style={{ background: isMe ? 'var(--bubble-own)' : 'var(--bubble-other)', borderRadius: isMe ? '20px 7px 20px 20px' : '7px 20px 20px 20px' }}
                         >
                           {msg.content && <span>{isDeleted ? msg.content : (searchActive ? highlight(msg.content, search.trim()) : renderContent(msg.content))}</span>}
+                          {!isDeleted && !msg.attachmentUrl && firstUrl(msg.content) && <LinkPreview url={firstUrl(msg.content)!} />}
                           {!isDeleted && <Attachment msg={msg} mine={isMe} />}
                         </div>
                       </div>
 
                       {!isDeleted && (
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {/* quick reactions */}
+                          {['👍', '❤️', '😂'].map((em) => (
+                            <button key={em} onClick={() => react(msg.id, em)} className="w-[26px] h-[26px] grid place-items-center rounded-lg bg-surface-2 border border-border hover:border-border-strong text-[14px] transition-colors" title={`React ${em}`}>{em}</button>
+                          ))}
                           {/* emoji */}
                           <div className="relative" data-menu>
                             <button onClick={(e) => { e.stopPropagation(); setEmojiId(emojiId === msg.id ? null : msg.id); setMenuId(null); }} className={actionBtnCls} aria-label="React">
@@ -776,6 +896,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                             <button onClick={(e) => { e.stopPropagation(); setMenuId(menuId === msg.id ? null : msg.id); setEmojiId(null); }} className={actionBtnCls} aria-label="More"><MoreVertical className="w-[14px] h-[14px]" /></button>
                             {menuId === msg.id && (
                               <div className={`card absolute z-50 bottom-full mb-1.5 ${isMe ? 'right-0' : 'left-0'} overflow-hidden min-w-[152px] py-1`} style={{ boxShadow: 'var(--shadow-lg), var(--edge-hi)' }} onClick={(e) => e.stopPropagation()}>
+                                {msg.content && <button onClick={() => copyText(msg)} className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-t1 hover:bg-hover transition-colors"><Copy className="w-[14px] h-[14px] text-t2" /> Copy text</button>}
                                 <button onClick={() => togglePin(msg.id)} className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-t1 hover:bg-hover transition-colors"><Pin className="w-[14px] h-[14px] text-t2" /> {msg.pinned ? 'Unpin' : 'Pin'}</button>
                                 <button onClick={() => toggleSave(msg.id)} className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-t1 hover:bg-hover transition-colors">{savedIds.has(msg.id) ? <BookmarkCheck className="w-[14px] h-[14px] text-accent-text" /> : <Bookmark className="w-[14px] h-[14px] text-t2" />} {savedIds.has(msg.id) ? 'Unsave' : 'Save'}</button>
                                 {canEdit && (
@@ -797,7 +918,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                         {Object.entries(rx).map(([em, users]) => {
                           const mineRx = users.includes(user.username);
                           return (
-                            <button key={em} onClick={() => react(msg.id, em)} className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors" style={mineRx ? { background: 'var(--accent-soft)', borderColor: 'var(--accent-line)', color: 'var(--accent-text)' } : { background: 'var(--surface-2)', borderColor: 'var(--border)', color: 'var(--t2)' }}>
+                            <button key={em} onClick={() => react(msg.id, em)} title={users.join(', ')} className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors" style={mineRx ? { background: 'var(--accent-soft)', borderColor: 'var(--accent-line)', color: 'var(--accent-text)' } : { background: 'var(--surface-2)', borderColor: 'var(--border)', color: 'var(--t2)' }}>
                               {em}<span className="text-[10px]">{users.length}</span>
                             </button>
                           );
@@ -828,6 +949,17 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
         )}
         <div ref={bottomRef} />
       </div>
+
+      {/* scroll to latest */}
+      {farUp && newCount === 0 && (
+        <button
+          onClick={() => { nearBottomRef.current = true; bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }}
+          className="absolute right-5 bottom-[88px] z-20 w-9 h-9 grid place-items-center rounded-full bg-surface border border-border-strong text-t2 hover:text-t1 shadow-[var(--shadow-md)] transition-colors"
+          aria-label="Scroll to latest"
+        >
+          <ArrowDown className="w-[16px] h-[16px]" />
+        </button>
+      )}
 
       {/* typing indicator */}
       {!isBot && typingUsers.length > 0 && (
@@ -917,7 +1049,16 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                   )}
                 </div>
               )}
-              <form onSubmit={send} className="relative flex items-center gap-1.5 rounded-[14px] border border-border-strong bg-surface-2 p-1.5">
+              <form onSubmit={send} className="relative flex items-end gap-1.5 rounded-[22px] border border-border-strong bg-surface-2 p-1.5">
+                {colonQuery !== null && emojiMatches.length > 0 && (
+                  <div className="card absolute bottom-full mb-2 left-0 p-1.5 flex gap-1 z-50" style={{ boxShadow: 'var(--shadow-lg), var(--edge-hi)' }}>
+                    {emojiMatches.map((item, i) => (
+                      <button type="button" key={item.custom ? `c-${item.name}` : item.e} onMouseDown={(e) => { e.preventDefault(); pickColon(item); }} onMouseEnter={() => setColonSel(i)} className="w-8 h-8 grid place-items-center text-xl p-1 rounded-md transition-colors" style={i === colonSel ? { background: 'var(--hover)' } : undefined} title={item.custom ? `:${item.name}:` : undefined}>
+                        {item.custom ? <img src={item.url} alt="" className="w-5 h-5 object-contain" /> : item.e}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {mentionQuery !== null && mentionMatches.length > 0 && (
                   <div className="card absolute bottom-full mb-2 left-0 w-[240px] py-1 z-50" style={{ boxShadow: 'var(--shadow-lg), var(--edge-hi)' }}>
                     {mentionMatches.map((m, i) => (
@@ -945,8 +1086,8 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                     <EmojiGifPicker onEmoji={insertEmoji} onGif={sendGif} onClose={() => setShowComposerPicker(false)} />
                   )}
                 </div>
-                <textarea ref={taRef} rows={1} value={input} onPaste={onPaste} onChange={(e) => { setInput(e.target.value); autoGrow(); notifyTyping(); detectMention(e.target.value, e.target.selectionStart ?? e.target.value.length); }} onKeyDown={onComposerKey} placeholder={`Message ${isChannel ? '#' + channel : headerTitle}`} className="scroll flex-1 min-w-0 bg-transparent border-0 outline-none resize-none text-[14.5px] leading-relaxed text-t1 px-1 py-2 max-h-[140px]" />
-                <button type="submit" disabled={(!input.trim() && !file) || uploading} aria-label="Send" className="btn-accent w-[34px] h-[34px] rounded-[10px] flex-none">
+                <textarea ref={taRef} rows={1} value={input} onPaste={onPaste} onChange={(e) => { const v = e.target.value; const p = e.target.selectionStart ?? v.length; setInput(v); autoGrow(); notifyTyping(); detectMention(v, p); detectColon(v, p); try { if (v) localStorage.setItem(`draft_${channel}`, v); else localStorage.removeItem(`draft_${channel}`); } catch { /* ignore */ } }} onKeyDown={onComposerKey} placeholder={`Message ${isChannel ? '#' + channel : headerTitle}`} className="scroll flex-1 min-w-0 bg-transparent border-0 outline-none resize-none text-[14.5px] leading-relaxed text-t1 px-1 py-2 max-h-[140px]" />
+                <button type="submit" disabled={(!input.trim() && !file) || uploading} aria-label="Send" className="btn-accent w-[36px] h-[36px] rounded-full flex-none">
                   {uploading ? <span className="w-[15px] h-[15px] rounded-full border-2 border-white/35 border-t-white tk-spin" /> : <Send className="w-[17px] h-[17px]" />}
                 </button>
               </form>

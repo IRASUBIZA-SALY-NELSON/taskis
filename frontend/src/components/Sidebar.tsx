@@ -98,7 +98,10 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
   const avatarSrc = (u: any) =>
     u.avatarUrl ? (u.avatarUrl.startsWith('http') ? u.avatarUrl : api(u.avatarUrl)) : null;
 
-  if (!isOpen) return null;
+  const select = (c: string) => {
+    setActiveChannel(c);
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) setIsOpen(false);
+  };
 
   const SectionLabel = ({ children }: { children: React.ReactNode }) => (
     <div className="eyebrow px-[9px] pt-4 pb-[5px]" style={{ letterSpacing: '0.08em' }}>{children}</div>
@@ -110,7 +113,9 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
     }`;
 
   return (
-    <aside className="w-[264px] flex-none flex flex-col h-screen bg-surface border-r border-border">
+    <>
+      {isOpen && <div onClick={() => setIsOpen(false)} className="fixed inset-0 bg-black/40 z-30 lg:hidden" aria-hidden />}
+      <aside className={`w-[264px] flex-none flex flex-col h-full bg-surface border-r border-border fixed lg:static inset-y-0 left-0 z-40 transition-transform duration-200 lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
       {/* header */}
       <div className="flex items-center gap-[9px] px-4 pt-4 pb-[13px] border-b border-border">
         <span className="tk-mark" style={{ width: 26, height: 26, borderRadius: 8 }}>
@@ -135,7 +140,7 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
 
       {/* lists */}
       <div className="scroll flex-1 overflow-y-auto px-2 pt-1.5 pb-2.5">
-        <button onClick={() => setActiveChannel('__posts__')} className={itemCls(activeChannel === '__posts__')}>
+        <button onClick={() => select('__posts__')} className={itemCls(activeChannel === '__posts__')}>
           <Newspaper className="w-[15px] h-[15px] flex-none" style={{ color: activeChannel === '__posts__' ? 'var(--accent-text)' : 'var(--t3)' }} />
           <span className="flex-1 text-sm font-medium">Feed</span>
         </button>
@@ -145,7 +150,7 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
           const active = activeChannel === c;
           const locked = c === 'confidential';
           return (
-            <button key={c} onClick={() => setActiveChannel(c)} className={itemCls(active)}>
+            <button key={c} onClick={() => select(c)} className={itemCls(active)}>
               <span className="w-3.5 text-center text-[15px] flex-none" style={{ color: active ? 'var(--accent-text)' : 'var(--t3)' }}>#</span>
               <span className="flex-1 text-sm font-medium">{c.charAt(0).toUpperCase() + c.slice(1)}</span>
               {locked && <Lock className="w-[13px] h-[13px] text-t3" />}
@@ -155,7 +160,7 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
         })}
 
         <SectionLabel>Bots</SectionLabel>
-        <button onClick={() => setActiveChannel('taskis-bot')} className={itemCls(activeChannel === 'taskis-bot')}>
+        <button onClick={() => select('taskis-bot')} className={itemCls(activeChannel === 'taskis-bot')}>
           <span className="w-[22px] h-[22px] rounded-md bg-accent-soft text-accent-text text-[11px] font-bold grid place-items-center flex-none">TB</span>
           <span className="flex-1 text-sm font-medium">Taskis Bot</span>
           {unread['taskis-bot'] && <span className="bg-accent text-on-accent text-[11px] font-semibold px-1.5 py-px rounded-full">●</span>}
@@ -167,7 +172,7 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
           const active = activeChannel === channelId;
           const src = avatarSrc(op);
           return (
-            <button key={op.id} onClick={() => setActiveChannel(channelId)} className={itemCls(active)}>
+            <button key={op.id} onClick={() => select(channelId)} className={itemCls(active)}>
               <span className="relative overflow-hidden w-[25px] h-[25px] rounded-full grid place-items-center flex-none text-[11px] font-semibold text-white" style={{ background: src ? 'transparent' : toneFor(op.username) }}>
                 {src ? <img src={src} alt="" className="absolute inset-0 w-full h-full object-cover" /> : initials(op.username)}
                 <span className="absolute -right-px -bottom-px w-[9px] h-[9px] rounded-full z-10" style={{ background: presenceColor(op.status), border: '2px solid var(--surface-1)' }} />
@@ -213,6 +218,7 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
       </div>
 
       {showProfile && <ProfileModal user={user} onClose={() => setShowProfile(false)} />}
-    </aside>
+      </aside>
+    </>
   );
 }

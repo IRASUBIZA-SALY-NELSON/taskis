@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Settings, Check } from 'lucide-react';
 import { FONT_OPTIONS, getFontId, applyFont } from '@/lib/prefs';
 import { getNotifyPrefs, setNotifyPrefs, requestNotificationPermission, notificationsEnabled } from '@/lib/notify';
+import { getThemeMode, applyThemeMode, type ThemeMode } from '@/lib/theme';
 
 function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
   return (
@@ -23,12 +24,14 @@ export default function SettingsMenu() {
   const [fontId, setFontId] = useState('geist');
   const [prefs, setPrefs] = useState({ sound: true, desktop: true });
   const [granted, setGranted] = useState(true);
+  const [theme, setTheme] = useState<ThemeMode>('light');
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setFontId(getFontId());
     setPrefs(getNotifyPrefs());
     setGranted(notificationsEnabled());
+    setTheme(getThemeMode());
   }, [open]);
 
   useEffect(() => {
@@ -54,7 +57,25 @@ export default function SettingsMenu() {
         <Settings className="w-[15px] h-[15px]" />
       </button>
       {open && (
-        <div className="card absolute bottom-full right-0 mb-2 w-[248px] py-1.5 z-50" style={{ boxShadow: 'var(--shadow-lg), var(--edge-hi)' }}>
+        <div className="card absolute bottom-full left-0 mb-2 w-[248px] max-w-[calc(100vw-32px)] py-1.5 z-50" style={{ boxShadow: 'var(--shadow-lg), var(--edge-hi)' }}>
+          <div className="eyebrow px-3 py-1.5">Appearance</div>
+          <div className="px-3 pb-1.5">
+            <div className="flex gap-1 p-0.5 rounded-lg bg-surface-2 border border-border">
+              {(['light', 'dark', 'system'] as ThemeMode[]).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => { applyThemeMode(m); setTheme(m); }}
+                  className="flex-1 py-1 rounded-md text-[12px] font-medium capitalize transition-colors"
+                  style={theme === m ? { background: 'var(--surface-1)', color: 'var(--t1)', boxShadow: 'var(--shadow-sm)' } : { color: 'var(--t3)' }}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="h-px bg-border my-1.5 mx-3" />
+
           <div className="eyebrow px-3 py-1.5">Notifications</div>
           <div className="flex items-center justify-between px-3 py-1.5">
             <span className="text-[13.5px] text-t1">Desktop alerts</span>

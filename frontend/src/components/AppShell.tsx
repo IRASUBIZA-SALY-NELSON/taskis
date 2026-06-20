@@ -2,11 +2,15 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { MotionConfig } from 'framer-motion';
 import Sidebar from '@/components/Sidebar';
 import ChatArea from '@/components/ChatArea';
 import PostsFeed from '@/components/PostsFeed';
 import NotificationManager from '@/components/NotificationManager';
 import CommandPalette from '@/components/CommandPalette';
+import ShortcutsHelp from '@/components/ShortcutsHelp';
+import GlobalSearch from '@/components/GlobalSearch';
+import { initThemeWatcher } from '@/lib/theme';
 
 export default function AppShell({ initialChannel = 'general' }: { initialChannel?: string }) {
   const router = useRouter();
@@ -19,7 +23,10 @@ export default function AppShell({ initialChannel = 'general' }: { initialChanne
     const userData = localStorage.getItem('user');
     if (!token || !userData) { router.push('/'); return; }
     setUser(JSON.parse(userData));
+    setIsSidebarOpen(window.innerWidth >= 1024);
   }, [router]);
+
+  useEffect(() => initThemeWatcher(), []);
 
   useEffect(() => {
     if (!user) return;
@@ -38,24 +45,30 @@ export default function AppShell({ initialChannel = 'general' }: { initialChanne
   if (!user) return <div className="min-h-screen flex items-center justify-center text-t2 text-sm">Establishing secure connection…</div>;
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <MotionConfig reducedMotion="user">
       <NotificationManager user={user} />
       <CommandPalette user={user} onNavigate={setActiveChannel} />
-      <Sidebar
-        user={user}
-        activeChannel={activeChannel}
-        setActiveChannel={setActiveChannel}
-        isOpen={isSidebarOpen}
-        setIsOpen={setIsSidebarOpen}
-      />
+      <GlobalSearch onNavigate={setActiveChannel} />
+      <ShortcutsHelp />
+      <div className="h-screen w-full overflow-hidden lg:p-3">
+        <div className="app-frame flex h-full w-full overflow-hidden">
+          <Sidebar
+            user={user}
+            activeChannel={activeChannel}
+            setActiveChannel={setActiveChannel}
+            isOpen={isSidebarOpen}
+            setIsOpen={setIsSidebarOpen}
+          />
 
-      <main className="flex-1 flex flex-col relative h-full min-w-0 bg-bg">
-        {activeChannel === '__posts__' ? (
-          <PostsFeed user={user} />
-        ) : (
-          <ChatArea user={user} channel={activeChannel} onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
-        )}
-      </main>
-    </div>
+          <main className="flex-1 flex flex-col relative h-full min-w-0 bg-bg">
+            {activeChannel === '__posts__' ? (
+              <PostsFeed user={user} onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
+            ) : (
+              <ChatArea user={user} channel={activeChannel} onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
+            )}
+          </main>
+        </div>
+      </div>
+    </MotionConfig>
   );
 }

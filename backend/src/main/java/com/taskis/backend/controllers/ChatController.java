@@ -137,6 +137,43 @@ public class ChatController {
         }
     }
 
+    @GetMapping("/search")
+    public ResponseEntity<?> search(@RequestParam(name = "q", required = false) String q, Principal principal) {
+        if (principal == null) return ResponseEntity.status(401).body("Unauthorized");
+        User user = userRepository.findByUsername(principal.getName()).orElse(null);
+        if (user == null) return ResponseEntity.status(401).body("User not found");
+
+        String needle = q == null ? "" : q.trim().toLowerCase();
+        if (needle.isEmpty()) return ResponseEntity.ok(java.util.Collections.emptyList());
+
+        // content is encrypted at rest, so filter in-app on the decrypted value
+        java.util.List<Map<String, Object>> out = new java.util.ArrayList<>();
+        messageRepository.findAll().stream()
+                .filter(m -> !Boolean.TRUE.equals(m.getDeleted()))
+                .filter(m -> m.getContent() != null && m.getContent().toLowerCase().contains(needle))
+                .filter(m -> canAccessChannel(user, m.getChannel()))
+                .sorted((a, b) -> b.getTimestamp().compareTo(a.getTimestamp()))
+                .limit(50)
+                .forEach(m -> {
+                    Map<String, Object> dto = new java.util.HashMap<>();
+                    dto.put("id", m.getId());
+                    dto.put("channel", m.getChannel());
+                    dto.put("content", m.getContent());
+                    dto.put("timestamp", m.getTimestamp());
+                    User sd = m.getSender();
+                    Map<String, Object> s = new java.util.HashMap<>();
+                    if (sd != null) {
+                        s.put("id", sd.getId());
+                        s.put("username", sd.getUsername());
+                        s.put("displayName", sd.getDisplayName());
+                        s.put("avatarUrl", sd.getAvatarUrl());
+                    }
+                    dto.put("sender", s);
+                    out.add(dto);
+                });
+        return ResponseEntity.ok(out);
+    }
+
     @PostMapping("/unlock-archive")
     public ResponseEntity<?> unlockArchive(
             @org.springframework.web.bind.annotation.RequestBody Map<String, String> payload, Principal principal) {

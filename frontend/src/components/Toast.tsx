@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useCallback, useRef, useEff
 import { createPortal } from 'react-dom';
 import { CheckCircle2, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useFocusTrap } from '@/lib/useFocusTrap';
 
 type ToastType = 'success' | 'error' | 'info';
 interface ToastItem { id: number; message: string; type: ToastType }
@@ -28,6 +29,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [confirmState, setConfirmState] = useState<(ConfirmOpts & { resolve: (b: boolean) => void }) | null>(null);
   const [mounted, setMounted] = useState(false);
   const idRef = useRef(0);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(!!confirmState, dialogRef);
 
   useEffect(() => setMounted(true), []);
 
@@ -90,6 +93,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               style={{ background: 'rgba(7,7,9,0.6)', backdropFilter: 'blur(2px)' }}
             >
               <motion.div
+                ref={dialogRef}
+                role="dialog"
+                aria-modal="true"
+                aria-label={confirmState.title || 'Confirm'}
                 initial={{ opacity: 0, scale: 0.96, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }}
                 transition={{ type: 'spring', stiffness: 460, damping: 32 }}
                 onClick={(e) => e.stopPropagation()}
