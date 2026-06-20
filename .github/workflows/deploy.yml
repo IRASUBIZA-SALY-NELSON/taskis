@@ -64,14 +64,8 @@ jobs:
                   fi
 
                   if [ "$FRONTEND_CHANGED" = "true" ]; then
-                    echo "==> (Re)start frontend (PM2, zero-downtime reload)"
-                    cd /home/plp/taskis/frontend
-                    if pm2 describe taskis-frontend > /dev/null 2>&1; then
-                      pm2 reload taskis-frontend --update-env
-                    else
-                      pm2 start "npm run start" --name taskis-frontend
-                    fi
-                    pm2 save || true
+                    echo "==> Restart frontend (systemd)"
+                    sudo -n systemctl restart taskis-frontend || echo "WARN: frontend restart needs passwordless sudo for 'systemctl restart taskis-frontend'"
                   fi
 
                   echo "==> Health check"
