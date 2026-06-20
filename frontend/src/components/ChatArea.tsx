@@ -652,7 +652,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     const full = msg.attachmentUrl.startsWith('http') ? msg.attachmentUrl : api(msg.attachmentUrl);
     if (msg.attachmentType?.startsWith('image/')) {
       return (
-        <button onClick={() => setBigImage(full)} className="block w-[282px] max-w-full rounded-[16px] overflow-hidden border border-border cursor-zoom-in hover:border-border-strong transition-colors p-0 bg-transparent mt-1.5 shadow-[var(--shadow-sm)]">
+        <button onClick={() => setBigImage(full)} className="block w-[282px] max-w-full rounded-[16px] overflow-hidden border border-border cursor-zoom-in hover:border-border-strong transition-colors p-0 bg-transparent shadow-[var(--shadow-sm)]">
           <img src={full} alt="attachment" className="w-full max-h-[260px] object-cover block" />
         </button>
       );
@@ -661,7 +661,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
       return <VoiceNote src={full} mine={mine} />;
     }
     return (
-      <div className="flex items-center gap-[11px] px-3 py-2.5 rounded-2xl border border-border w-[264px] max-w-full mt-1.5" style={{ background: mine ? 'var(--bubble-own)' : 'var(--surface-2)' }}>
+      <div className="flex items-center gap-[11px] px-3 py-2.5 rounded-2xl border border-border w-[264px] max-w-full" style={{ background: 'var(--surface-2)' }}>
         <span className="w-[34px] h-[34px] rounded-xl bg-surface-3 grid place-items-center flex-none text-t2"><FileText className="w-4 h-4" /></span>
         <div className="flex-1 min-w-0">
           <div className="text-[13.5px] font-medium text-t1 truncate">{fileNameOf(msg.attachmentUrl)}</div>
@@ -863,15 +863,17 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
 
                     {/* bubble + hover actions */}
                     <div className={`flex items-center gap-1.5 ${isMe ? 'flex-row-reverse' : ''}`}>
-                      <div>
-                        <div
-                          className={`px-[13px] py-[9px] text-[14.5px] leading-relaxed border border-border whitespace-pre-wrap break-words ${isDeleted ? 'opacity-50 italic text-t2' : 'text-t1'}`}
-                          style={{ background: isMe ? 'var(--bubble-own)' : 'var(--bubble-other)', borderRadius: isMe ? '20px 7px 20px 20px' : '7px 20px 20px 20px' }}
-                        >
-                          {msg.content && <span>{isDeleted ? msg.content : (searchActive ? highlight(msg.content, search.trim()) : renderContent(msg.content))}</span>}
-                          {!isDeleted && !msg.attachmentUrl && firstUrl(msg.content) && <LinkPreview url={firstUrl(msg.content)!} />}
-                          {!isDeleted && <Attachment msg={msg} mine={isMe} />}
-                        </div>
+                      <div className={`flex flex-col gap-1.5 min-w-0 ${isMe ? 'items-end' : 'items-start'}`}>
+                        {(msg.content || isDeleted) && (
+                          <div
+                            className={`px-[14px] py-[9px] text-[14.5px] leading-relaxed whitespace-pre-wrap break-words ${isDeleted ? 'opacity-50 italic' : ''}`}
+                            style={{ background: isMe ? 'var(--bubble-own)' : 'var(--bubble-other)', color: isMe ? 'var(--bubble-own-text)' : 'var(--bubble-other-text)', borderRadius: isMe ? '20px 7px 20px 20px' : '7px 20px 20px 20px' }}
+                          >
+                            {msg.content ? (isDeleted ? msg.content : (searchActive ? highlight(msg.content, search.trim()) : renderContent(msg.content))) : msg.content}
+                          </div>
+                        )}
+                        {!isDeleted && !msg.attachmentUrl && firstUrl(msg.content) && <LinkPreview url={firstUrl(msg.content)!} />}
+                        {!isDeleted && <Attachment msg={msg} mine={isMe} />}
                       </div>
 
                       {!isDeleted && (

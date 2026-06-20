@@ -50,7 +50,7 @@ export default function AppShell({ initialChannel = 'general' }: { initialChanne
       <CommandPalette user={user} onNavigate={setActiveChannel} />
       <GlobalSearch onNavigate={setActiveChannel} />
       <ShortcutsHelp />
-      <div className="h-screen w-full overflow-hidden lg:p-3">
+      <div className="h-screen w-full overflow-hidden p-0 sm:p-3 lg:p-5 xl:p-6">
         <div className="app-frame flex h-full w-full overflow-hidden">
           <Sidebar
             user={user}

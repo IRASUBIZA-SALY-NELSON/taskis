@@ -30,8 +30,10 @@
   --accent-line: rgba(217, 119, 87, 0.45);
   --on-accent: #ffffff;
 
-  --bubble-own: #3a302a;
-  --bubble-other: #2a2825;
+  --bubble-own: #46392f;
+  --bubble-own-text: #f5efe8;
+  --bubble-other: #312d27;
+  --bubble-other-text: #ece9e2;
 
   --online: #5fae7e;
   --away: #d3a24a;
@@ -44,7 +46,10 @@
 
   --edge-hi: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 
-  --wash: linear-gradient(135deg, rgba(217, 119, 87, 0.07), transparent 44%), linear-gradient(305deg, rgba(95, 145, 115, 0.06), transparent 48%);
+  --wash:
+    radial-gradient(60% 55% at 0% 0%, rgba(217, 119, 87, 0.18), transparent 60%),
+    radial-gradient(60% 55% at 100% 100%, rgba(78, 150, 120, 0.18), transparent 60%),
+    radial-gradient(45% 45% at 100% 0%, rgba(150, 130, 200, 0.12), transparent 60%);
 
   /* warm editorial serif for the wordmark + display headings */
   --font-serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
@@ -75,8 +80,11 @@
   --accent-line: rgba(196, 95, 63, 0.38);
   --on-accent: #fffaf5;
 
-  --bubble-own: #f6e7df;
-  --bubble-other: #fffefb;
+  /* Dribbble-style: dark received bubble, light sent bubble */
+  --bubble-own: #f0e7d9;
+  --bubble-own-text: #2a2218;
+  --bubble-other: #28241e;
+  --bubble-other-text: #f4f1ea;
 
   --online: #2f9d5f;
   --away: #b9842a;
@@ -89,7 +97,11 @@
 
   --edge-hi: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 
-  --wash: linear-gradient(135deg, rgba(214, 140, 80, 0.16), transparent 42%), linear-gradient(305deg, rgba(120, 165, 130, 0.18), transparent 46%);
+  --wash:
+    radial-gradient(58% 55% at 0% 0%, rgba(245, 198, 150, 0.70), transparent 60%),
+    radial-gradient(60% 58% at 100% 100%, rgba(168, 214, 180, 0.70), transparent 60%),
+    radial-gradient(48% 48% at 100% 0%, rgba(210, 196, 240, 0.50), transparent 58%),
+    radial-gradient(50% 50% at 0% 100%, rgba(240, 210, 170, 0.45), transparent 60%);
 
   color-scheme: light;
 }
@@ -242,8 +254,8 @@ textarea:focus-visible {
   background: var(--surface-1);
   box-shadow: var(--shadow-lg), var(--edge-hi);
 }
-@media (min-width: 1024px) {
-  .app-frame { border: 1px solid var(--border); border-radius: 26px; }
+@media (min-width: 640px) {
+  .app-frame { border: 1px solid var(--border); border-radius: 28px; }
 }
 
 .tk-input {
