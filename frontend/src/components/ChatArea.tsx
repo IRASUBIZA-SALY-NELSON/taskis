@@ -794,6 +794,10 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
 
                       {!isDeleted && (
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {/* quick reactions */}
+                          {['👍', '❤️', '😂'].map((em) => (
+                            <button key={em} onClick={() => react(msg.id, em)} className="w-[26px] h-[26px] grid place-items-center rounded-lg bg-surface-2 border border-border hover:border-border-strong text-[14px] transition-colors" title={`React ${em}`}>{em}</button>
+                          ))}
                           {/* emoji */}
                           <div className="relative" data-menu>
                             <button onClick={(e) => { e.stopPropagation(); setEmojiId(emojiId === msg.id ? null : msg.id); setMenuId(null); }} className={actionBtnCls} aria-label="React">
@@ -832,7 +836,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                         {Object.entries(rx).map(([em, users]) => {
                           const mineRx = users.includes(user.username);
                           return (
-                            <button key={em} onClick={() => react(msg.id, em)} className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors" style={mineRx ? { background: 'var(--accent-soft)', borderColor: 'var(--accent-line)', color: 'var(--accent-text)' } : { background: 'var(--surface-2)', borderColor: 'var(--border)', color: 'var(--t2)' }}>
+                            <button key={em} onClick={() => react(msg.id, em)} title={users.join(', ')} className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors" style={mineRx ? { background: 'var(--accent-soft)', borderColor: 'var(--accent-line)', color: 'var(--accent-text)' } : { background: 'var(--surface-2)', borderColor: 'var(--border)', color: 'var(--t2)' }}>
                               {em}<span className="text-[10px]">{users.length}</span>
                             </button>
                           );
