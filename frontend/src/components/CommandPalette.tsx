@@ -7,6 +7,7 @@ import { Hash, Newspaper, Bot, Shield, LogOut, Search, Sun, Moon, User as UserIc
 import { motion, AnimatePresence } from 'framer-motion';
 import { initials, toneFor, displayOf } from './Sidebar';
 import { disconnectWs } from '@/lib/ws';
+import { useFocusTrap } from '@/lib/useFocusTrap';
 
 const api = (p: string) => `http://${window.location.hostname}:8080${p}`;
 const CHANNELS = ['general', 'intel', 'alerts', 'confidential'];
@@ -21,6 +22,8 @@ export default function CommandPalette({ user, onNavigate }: { user: any; onNavi
   const [ops, setOps] = useState<any[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(open, cardRef);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -103,6 +106,10 @@ export default function CommandPalette({ user, onNavigate }: { user: any; onNavi
           <motion.div
             initial={{ opacity: 0, scale: 0.97, y: -8 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.98 }}
             transition={{ type: 'spring', stiffness: 460, damping: 32 }}
+            ref={cardRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Command palette"
             onClick={(e) => e.stopPropagation()}
             className="card w-[560px] max-w-full overflow-hidden"
             style={{ boxShadow: 'var(--shadow-lg), var(--edge-hi)' }}

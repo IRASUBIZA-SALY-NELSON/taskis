@@ -4,6 +4,7 @@ import React, { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Camera } from 'lucide-react';
 import { initials, toneFor } from './Sidebar';
+import { useFocusTrap } from '@/lib/useFocusTrap';
 
 interface Props {
   user: any;
@@ -18,6 +19,8 @@ export default function ProfileModal({ user, onClose }: Props) {
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(true, cardRef);
 
   const token = () => localStorage.getItem('token');
   const currentAvatar = user.avatarUrl ? (user.avatarUrl.startsWith('http') ? user.avatarUrl : api(user.avatarUrl)) : null;
@@ -59,7 +62,7 @@ export default function ProfileModal({ user, onClose }: Props) {
 
   return createPortal(
     <div onClick={onClose} className="fixed inset-0 z-[400] flex items-center justify-center p-6 tk-fade" style={{ background: 'rgba(7,7,9,0.62)', backdropFilter: 'blur(2px)' }}>
-      <div onClick={(e) => e.stopPropagation()} className="card tk-pop w-[420px] max-w-full p-7" style={{ boxShadow: 'var(--shadow-lg), var(--edge-hi)' }}>
+      <div ref={cardRef} role="dialog" aria-modal="true" aria-label="Edit profile" onClick={(e) => e.stopPropagation()} className="card tk-pop w-[420px] max-w-full p-7" style={{ boxShadow: 'var(--shadow-lg), var(--edge-hi)' }}>
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-lg font-semibold text-t1">Edit profile</h2>
           <button onClick={onClose} className="icon-btn w-8 h-8" aria-label="Close"><X className="w-[15px] h-[15px]" /></button>
