@@ -228,7 +228,7 @@ function PostCard({ post, user, now, onChange, onDelete, onZoom }: { post: any; 
               ))}
               <form onSubmit={addComment} className="flex items-center gap-2 pt-1">
                 <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Add a comment…" className="tk-input flex-1" style={{ padding: '8px 12px', fontSize: 13.5 }} />
-                <button type="submit" disabled={!text.trim()} className="btn-accent w-9 h-9 rounded-[10px] flex-none"><Send className="w-[15px] h-[15px]" /></button>
+                <button type="submit" disabled={!text.trim()} className="btn-accent w-9 h-9 rounded-full flex-none"><Send className="w-[15px] h-[15px]" /></button>
               </form>
             </div>
           </motion.div>

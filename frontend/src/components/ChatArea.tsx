@@ -651,7 +651,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     const full = msg.attachmentUrl.startsWith('http') ? msg.attachmentUrl : api(msg.attachmentUrl);
     if (msg.attachmentType?.startsWith('image/')) {
       return (
-        <button onClick={() => setBigImage(full)} className="block w-[282px] max-w-full rounded-[14px] overflow-hidden border border-border cursor-zoom-in hover:border-border-strong transition-colors p-0 bg-transparent mt-1.5">
+        <button onClick={() => setBigImage(full)} className="block w-[282px] max-w-full rounded-[16px] overflow-hidden border border-border cursor-zoom-in hover:border-border-strong transition-colors p-0 bg-transparent mt-1.5 shadow-[var(--shadow-sm)]">
           <img src={full} alt="attachment" className="w-full max-h-[260px] object-cover block" />
         </button>
       );
