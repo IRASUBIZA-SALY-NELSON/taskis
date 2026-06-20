@@ -178,25 +178,25 @@ function PostCard({ post, user, now, onChange, onDelete, onZoom }: { post: any; 
         </div>
       )}
 
-      <div className="px-4 pt-3 flex items-center gap-1">
-        <motion.button whileTap={{ scale: 0.82 }} onClick={() => like()} className="flex items-center gap-1.5 text-sm font-medium transition-colors" style={{ color: liked ? 'var(--danger)' : 'var(--t2)' }}>
-          <Heart className="w-[21px] h-[21px]" fill={liked ? 'currentColor' : 'none'} /> {post.likeCount || 0}
+      <div className="px-3 pt-2.5 flex items-center gap-0.5">
+        <motion.button whileTap={{ scale: 0.88 }} onClick={() => like()} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[13.5px] font-medium hover:bg-hover transition-colors" style={{ color: liked ? 'var(--danger)' : 'var(--t2)' }}>
+          <Heart className="w-[19px] h-[19px]" fill={liked ? 'currentColor' : 'none'} /> {post.likeCount || 0}
         </motion.button>
-        <button onClick={toggleComments} className="flex items-center gap-1.5 text-sm font-medium text-t2 hover:text-t1 transition-colors ml-4">
-          <MessageCircle className="w-[20px] h-[20px]" /> {post.commentCount || 0}
+        <button onClick={toggleComments} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[13.5px] font-medium text-t2 hover:bg-hover hover:text-t1 transition-colors">
+          <MessageCircle className="w-[19px] h-[19px]" /> {post.commentCount || 0}
         </button>
-        <div className="relative ml-auto" data-menu>
-          <button onClick={() => setPickReact((s) => !s)} className="icon-btn w-8 h-8 border-0" title="React"><Smile className="w-[18px] h-[18px]" /></button>
-          {pickReact && <EmojiGifPicker reactMode align="right" onEmoji={react} onClose={() => setPickReact(false)} />}
+        <div className="relative" data-menu>
+          <button onClick={() => setPickReact((s) => !s)} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[13.5px] font-medium text-t2 hover:bg-hover hover:text-t1 transition-colors" title="React"><Smile className="w-[19px] h-[19px]" /></button>
+          {pickReact && <EmojiGifPicker reactMode align="left" vertical="down" onEmoji={react} onClose={() => setPickReact(false)} />}
         </div>
       </div>
 
       {Object.keys(rx).length > 0 && (
-        <div className="px-4 pt-2.5 flex flex-wrap gap-1.5">
+        <div className="px-4 pt-1 flex flex-wrap gap-1.5">
           {Object.entries(rx).map(([em, users]) => {
             const me = users.includes(user.username);
             return (
-              <motion.button key={em} whileTap={{ scale: 0.9 }} onClick={() => react(em)} className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors" style={me ? { background: 'var(--accent-soft)', borderColor: 'var(--accent-line)', color: 'var(--accent-text)' } : { background: 'var(--surface-2)', borderColor: 'var(--border)', color: 'var(--t2)' }}>
+              <motion.button key={em} whileTap={{ scale: 0.9 }} onClick={() => react(em)} title={users.join(', ')} className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors" style={me ? { background: 'var(--accent-soft)', borderColor: 'var(--accent-line)', color: 'var(--accent-text)' } : { background: 'var(--surface-2)', borderColor: 'var(--border)', color: 'var(--t2)' }}>
                 {em}<span className="text-[10px]">{users.length}</span>
               </motion.button>
             );

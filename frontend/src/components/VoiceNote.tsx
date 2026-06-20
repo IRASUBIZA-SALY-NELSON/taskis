@@ -67,7 +67,7 @@ export default function VoiceNote({ src, mine }: { src: string; mine: boolean })
   };
 
   return (
-    <div className="flex items-center gap-3 px-3 py-2.5 rounded-2xl border border-border w-[282px] max-w-full mt-1.5" style={{ background: mine ? 'var(--bubble-own)' : 'var(--surface-2)' }}>
+    <div className="flex items-center gap-3 px-3 py-2.5 rounded-2xl border border-border w-[282px] max-w-full" style={{ background: 'var(--surface-2)' }}>
       <audio
         ref={audioRef}
         src={src}
