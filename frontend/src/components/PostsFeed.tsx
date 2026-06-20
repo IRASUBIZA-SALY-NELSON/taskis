@@ -2,13 +2,14 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Heart, MessageCircle, Image as ImageIcon, Trash2, Send, X, Smile, Clock, ArrowUp, Sparkles } from 'lucide-react';
+import { Heart, MessageCircle, Image as ImageIcon, Trash2, Send, X, Smile, Clock, ArrowUp, Sparkles, Menu } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { initials, toneFor, displayOf } from './Sidebar';
 import { subscribe } from '@/lib/ws';
 import EmojiGifPicker from './EmojiGifPicker';
 import { useToast } from './Toast';
 import { renderRich } from '@/lib/rich';
+import LinkPreview, { firstUrl } from './LinkPreview';
 
 const PAGE = 10;
 const api = (p: string) => `http://${window.location.hostname}:8080${p}`;
@@ -204,6 +205,7 @@ function PostCard({ post, user, now, onChange, onDelete, onZoom }: { post: any; 
       {post.caption && (
         <div className="px-4 pt-2.5 pb-3 text-[14.5px] leading-relaxed text-t1 whitespace-pre-wrap break-words">
           <span className="font-semibold mr-1.5">{displayOf(post.author)}</span>{renderText(post.caption)}
+          {!post.imageUrl && firstUrl(post.caption) && <LinkPreview url={firstUrl(post.caption)!} />}
         </div>
       )}
 
@@ -253,7 +255,7 @@ function SkeletonCard() {
   );
 }
 
-export default function PostsFeed({ user }: { user: any }) {
+export default function PostsFeed({ user, onToggleSidebar }: { user: any; onToggleSidebar?: () => void }) {
   const { confirm, toast } = useToast();
   const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -384,6 +386,7 @@ export default function PostsFeed({ user }: { user: any }) {
   return (
     <div className="flex flex-col h-full">
       <header className="flex items-center gap-[13px] px-[22px] h-[62px] flex-none border-b border-border">
+        {onToggleSidebar && <button onClick={onToggleSidebar} className="icon-btn w-8 h-8 lg:hidden" aria-label="Toggle sidebar"><Menu className="w-[15px] h-[15px]" /></button>}
         <div className="flex-1 min-w-0">
           <div className="serif text-[18px] font-semibold text-t1 leading-tight">Feed</div>
           <div className="text-xs text-t2 mt-px flex items-center gap-1.5"><Clock className="w-[11px] h-[11px]" />Posts vanish 24 hours after sharing</div>

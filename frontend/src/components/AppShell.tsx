@@ -19,6 +19,7 @@ export default function AppShell({ initialChannel = 'general' }: { initialChanne
     const userData = localStorage.getItem('user');
     if (!token || !userData) { router.push('/'); return; }
     setUser(JSON.parse(userData));
+    setIsSidebarOpen(window.innerWidth >= 1024);
   }, [router]);
 
   useEffect(() => {
@@ -51,7 +52,7 @@ export default function AppShell({ initialChannel = 'general' }: { initialChanne
 
       <main className="flex-1 flex flex-col relative h-full min-w-0 bg-bg">
         {activeChannel === '__posts__' ? (
-          <PostsFeed user={user} />
+          <PostsFeed user={user} onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
         ) : (
           <ChatArea user={user} channel={activeChannel} onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
         )}

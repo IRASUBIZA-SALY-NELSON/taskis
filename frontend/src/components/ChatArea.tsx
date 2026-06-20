@@ -9,6 +9,7 @@ import { subscribe, publish } from '@/lib/ws';
 import EmojiGifPicker from './EmojiGifPicker';
 import { useToast } from './Toast';
 import { renderRich } from '@/lib/rich';
+import LinkPreview, { firstUrl } from './LinkPreview';
 
 interface ChatAreaProps { user: any; channel: string; onToggleSidebar: () => void; }
 
@@ -746,6 +747,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                           style={{ background: isMe ? 'var(--bubble-own)' : 'var(--bubble-other)', borderRadius: isMe ? '15px 5px 15px 15px' : '5px 15px 15px 15px' }}
                         >
                           {msg.content && <span>{isDeleted ? msg.content : (searchActive ? highlight(msg.content, search.trim()) : renderContent(msg.content))}</span>}
+                          {!isDeleted && !msg.attachmentUrl && firstUrl(msg.content) && <LinkPreview url={firstUrl(msg.content)!} />}
                           {!isDeleted && <Attachment msg={msg} mine={isMe} />}
                         </div>
                       </div>
