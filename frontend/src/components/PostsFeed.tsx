@@ -8,6 +8,7 @@ import { initials, toneFor, displayOf } from './Sidebar';
 import { subscribe } from '@/lib/ws';
 import EmojiGifPicker from './EmojiGifPicker';
 import { useToast } from './Toast';
+import { renderRich } from '@/lib/rich';
 
 const PAGE = 10;
 const api = (p: string) => `http://${window.location.hostname}:8080${p}`;
@@ -15,14 +16,7 @@ const token = () => localStorage.getItem('token');
 const authJson = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` });
 const mediaUrl = (u?: string) => (!u ? '' : u.startsWith('http') ? u : api(u));
 
-function renderText(text: string) {
-  if (!text) return null;
-  return text.split(/(https?:\/\/[^\s]+|@\w+)/g).map((p, i) => {
-    if (/^https?:\/\//.test(p)) return <a key={i} href={p} target="_blank" rel="noopener noreferrer" className="underline text-accent-text break-all">{p}</a>;
-    if (/^@\w+$/.test(p)) return <span key={i} className="font-medium text-accent-text">{p}</span>;
-    return <span key={i}>{p}</span>;
-  });
-}
+const renderText = (text: string) => renderRich(text);
 
 function parseRx(r: string): Record<string, string[]> {
   if (!r || !r.trim()) return {};

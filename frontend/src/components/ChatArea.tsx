@@ -2,12 +2,13 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Send, Paperclip, FileText, Download, Lock, Menu, X, AlertCircle, MessageSquare, MoreVertical, Reply, Pencil, Trash2, SmilePlus, CheckCheck, Search, Pin, Bookmark, BookmarkCheck, Mic, Square, Smile } from 'lucide-react';
+import { Send, Paperclip, FileText, Download, Lock, Menu, X, AlertCircle, MessageSquare, MoreVertical, Reply, Pencil, Trash2, SmilePlus, CheckCheck, Search, Pin, Bookmark, BookmarkCheck, Mic, Square, Smile, Copy } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { initials, toneFor, displayOf } from './Sidebar';
 import { subscribe, publish } from '@/lib/ws';
 import EmojiGifPicker from './EmojiGifPicker';
 import { useToast } from './Toast';
+import { renderRich } from '@/lib/rich';
 
 interface ChatAreaProps { user: any; channel: string; onToggleSidebar: () => void; }
 
@@ -373,6 +374,12 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
 
   const startEdit = (msg: any) => { setMenuId(null); setEditMsg(msg); setEditVal(msg.content); setTimeout(() => editRef.current?.focus(), 50); };
 
+  const copyText = async (m: any) => {
+    setMenuId(null);
+    try { await navigator.clipboard.writeText(m.content || ''); toast('Copied to clipboard', 'success'); }
+    catch { toast('Could not copy', 'error'); }
+  };
+
   const submitEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     const r = await fetch(api(`/api/chat/messages/${editMsg.id}`), { method: 'PUT', headers: authH(), body: JSON.stringify({ content: editVal }) });
@@ -416,22 +423,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
 
   const fileNameOf = (url: string) => url.split('/').pop()?.split('_').slice(1).join('_') || 'Document';
 
-  const renderContent = (text: string) =>
-    text.split(/(https?:\/\/[^\s]+|@\w+)/g).map((part, i) => {
-      if (/^https?:\/\//.test(part)) {
-        return <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="underline text-accent-text break-all hover:opacity-80">{part}</a>;
-      }
-      if (/^@\w+$/.test(part)) {
-        const name = part.slice(1);
-        const known = members.some((m) => m.username?.toLowerCase() === name.toLowerCase()) || name.toLowerCase() === user.username.toLowerCase();
-        if (!known) return <span key={i}>{part}</span>;
-        const isMe = name.toLowerCase() === user.username.toLowerCase();
-        return (
-          <span key={i} className="font-medium" style={{ color: 'var(--accent-text)', background: isMe ? 'var(--accent-soft)' : 'transparent', borderRadius: 4, padding: isMe ? '0 3px' : 0 }}>{part}</span>
-        );
-      }
-      return <span key={i}>{part}</span>;
-    });
+  const renderContent = (text: string) => renderRich(text, { members, me: user.username });
 
   const detectMention = (val: string, pos: number) => {
     const upto = val.slice(0, pos);
@@ -726,7 +718,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                     {!grouped && (
                       <div className={`flex items-baseline gap-2 mb-1 ${isMe ? 'flex-row-reverse' : ''}`}>
                         <span className="text-[13px] font-semibold text-t1">{isMe ? 'You' : displayOf(msg.sender)}</span>
-                        <span className="text-[11px] text-t3">{fmt(msg.timestamp)}</span>
+                        <span className="text-[11px] text-t3" title={new Date(msg.timestamp).toLocaleString()}>{fmt(msg.timestamp)}</span>
                         {msg.edited && !isDeleted && <span className="text-[11px] text-t3 italic">edited</span>}
                         {msg.pinned && <Pin className="w-[11px] h-[11px] text-accent-text" />}
                       </div>
@@ -776,6 +768,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                             <button onClick={(e) => { e.stopPropagation(); setMenuId(menuId === msg.id ? null : msg.id); setEmojiId(null); }} className={actionBtnCls} aria-label="More"><MoreVertical className="w-[14px] h-[14px]" /></button>
                             {menuId === msg.id && (
                               <div className={`card absolute z-50 bottom-full mb-1.5 ${isMe ? 'right-0' : 'left-0'} overflow-hidden min-w-[152px] py-1`} style={{ boxShadow: 'var(--shadow-lg), var(--edge-hi)' }} onClick={(e) => e.stopPropagation()}>
+                                {msg.content && <button onClick={() => copyText(msg)} className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-t1 hover:bg-hover transition-colors"><Copy className="w-[14px] h-[14px] text-t2" /> Copy text</button>}
                                 <button onClick={() => togglePin(msg.id)} className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-t1 hover:bg-hover transition-colors"><Pin className="w-[14px] h-[14px] text-t2" /> {msg.pinned ? 'Unpin' : 'Pin'}</button>
                                 <button onClick={() => toggleSave(msg.id)} className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-t1 hover:bg-hover transition-colors">{savedIds.has(msg.id) ? <BookmarkCheck className="w-[14px] h-[14px] text-accent-text" /> : <Bookmark className="w-[14px] h-[14px] text-t2" />} {savedIds.has(msg.id) ? 'Unsave' : 'Save'}</button>
                                 {canEdit && (
