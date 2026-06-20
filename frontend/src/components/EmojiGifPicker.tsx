@@ -1,10 +1,12 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Search } from 'lucide-react';
+import { Search, Plus, Upload } from 'lucide-react';
 import { EMOJI_GROUPS, searchEmoji } from '@/lib/emoji';
+import { useCustomEmojis, loadCustomEmojis } from '@/lib/customEmoji';
 
 const GIPHY_KEY = process.env.NEXT_PUBLIC_GIPHY_KEY || 'dc6zaTOxFJmzC'; // public beta key
+const apiUrl = (p: string) => `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:8080${p}`;
 
 interface Props {
   onEmoji: (e: string) => void;
@@ -16,11 +18,31 @@ interface Props {
 }
 
 export default function EmojiGifPicker({ onEmoji, onGif, onClose, align = 'left', vertical = 'up', reactMode = false }: Props) {
-  const [tab, setTab] = useState<'emoji' | 'gif'>('emoji');
+  const [tab, setTab] = useState<'emoji' | 'gif' | 'custom'>('emoji');
   const [q, setQ] = useState('');
   const [gifs, setGifs] = useState<{ id: string; url: string; preview: string }[]>([]);
   const [gifLoading, setGifLoading] = useState(false);
+  const [addName, setAddName] = useState('');
+  const [addErr, setAddErr] = useState('');
   const ref = useRef<HTMLDivElement>(null);
+  const addFileRef = useRef<HTMLInputElement>(null);
+  const { list: customList } = useCustomEmojis();
+
+  const uploadCustom = async (file: File) => {
+    const name = addName.toLowerCase().replace(/[^a-z0-9_]/g, '');
+    if (!/^[a-z0-9_]{2,32}$/.test(name)) { setAddErr('Name: 2–32 of a–z, 0–9, _'); return; }
+    setAddErr('');
+    try {
+      const fd = new FormData(); fd.append('file', file);
+      const up = await fetch(apiUrl('/api/chat/upload'), { method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }, body: fd });
+      if (!up.ok) throw new Error();
+      const url = (await up.json()).url;
+      const r = await fetch(apiUrl('/api/emojis'), { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` }, body: JSON.stringify({ name, url }) });
+      if (!r.ok) { setAddErr(await r.text()); return; }
+      setAddName('');
+      loadCustomEmojis();
+    } catch { setAddErr('Upload failed'); }
+  };
 
   useEffect(() => {
     const close = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onClose(); };
@@ -63,34 +85,56 @@ export default function EmojiGifPicker({ onEmoji, onGif, onClose, align = 'left'
     >
       {!reactMode && (
         <div className="flex border-b border-border">
-          {(['emoji', 'gif'] as const).map((t) => (
+          {(['emoji', 'gif', 'custom'] as const).map((t) => (
             <button
               key={t}
               onClick={() => { setTab(t); setQ(''); }}
               className="flex-1 py-2 text-[12px] font-semibold uppercase tracking-wider transition-colors"
               style={tab === t ? { color: 'var(--accent-text)', boxShadow: 'inset 0 -2px 0 var(--accent)' } : { color: 'var(--t3)' }}
             >
-              {t === 'emoji' ? 'Emoji' : 'GIF'}
+              {t === 'emoji' ? 'Emoji' : t === 'gif' ? 'GIF' : 'Custom'}
             </button>
           ))}
         </div>
       )}
 
-      <div className="p-2 border-b border-border">
-        <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-[14px] h-[14px] text-t3" />
-          <input
-            autoFocus
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder={tab === 'gif' ? 'Search GIFs' : 'Search emoji'}
-            className="tk-input"
-            style={{ padding: '7px 10px 7px 30px', fontSize: 13 }}
-          />
+      {tab !== 'custom' && (
+        <div className="p-2 border-b border-border">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-[14px] h-[14px] text-t3" />
+            <input
+              autoFocus
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder={tab === 'gif' ? 'Search GIFs' : 'Search emoji'}
+              className="tk-input"
+              style={{ padding: '7px 10px 7px 30px', fontSize: 13 }}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
-      {tab === 'emoji' ? (
+      {tab === 'custom' ? (
+        <div className="scroll max-h-[230px] overflow-y-auto p-2">
+          <div className="flex items-center gap-1.5 mb-2">
+            <input value={addName} onChange={(e) => setAddName(e.target.value.toLowerCase())} placeholder="emoji_name" className="tk-input font-mono flex-1" style={{ padding: '6px 10px', fontSize: 12 }} />
+            <button type="button" onClick={() => addFileRef.current?.click()} className="btn-secondary px-2.5 py-[7px] text-[12px] flex-none"><Upload className="w-[13px] h-[13px]" />Add</button>
+            <input ref={addFileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadCustom(f); e.target.value = ''; }} />
+          </div>
+          {addErr && <div className="text-[11.5px] text-danger mb-1.5 px-0.5">{addErr}</div>}
+          {customList.length === 0 ? (
+            <div className="text-center text-[12px] text-t3 py-5 flex flex-col items-center gap-1"><Plus className="w-4 h-4" />No custom emoji yet</div>
+          ) : (
+            <div className="grid grid-cols-6 gap-1">
+              {customList.map((ce) => (
+                <button key={ce.id} type="button" onClick={() => onEmoji(`:${ce.name}:`)} title={`:${ce.name}:`} className="p-1 rounded-md hover:bg-hover grid place-items-center transition-colors">
+                  <img src={ce.url} alt={ce.name} className="w-6 h-6 object-contain" />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : tab === 'emoji' ? (
         <div className="scroll max-h-[230px] overflow-y-auto p-2">
           {q.trim() ? (
             <div className="grid grid-cols-8 gap-0.5">

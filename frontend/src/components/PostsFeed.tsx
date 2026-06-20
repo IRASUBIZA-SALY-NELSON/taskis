@@ -10,6 +10,7 @@ import EmojiGifPicker from './EmojiGifPicker';
 import { useToast } from './Toast';
 import { renderRich } from '@/lib/rich';
 import LinkPreview, { firstUrl } from './LinkPreview';
+import { useCustomEmojis } from '@/lib/customEmoji';
 
 const PAGE = 10;
 const api = (p: string) => `http://${window.location.hostname}:8080${p}`;
@@ -17,7 +18,6 @@ const token = () => localStorage.getItem('token');
 const authJson = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` });
 const mediaUrl = (u?: string) => (!u ? '' : u.startsWith('http') ? u : api(u));
 
-const renderText = (text: string) => renderRich(text);
 
 function parseRx(r: string): Record<string, string[]> {
   if (!r || !r.trim()) return {};
@@ -85,6 +85,8 @@ function PostCard({ post, user, now, onChange, onDelete, onZoom }: { post: any; 
   const [burst, setBurst] = useState(false);
   const [pickReact, setPickReact] = useState(false);
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { map: customMap } = useCustomEmojis();
+  const renderText = (t: string) => renderRich(t, { custom: customMap });
   const mine = post.author?.username === user.username;
   const liked = (post.likers || []).includes(user.username);
   const rx = parseRx(post.reactions || '');

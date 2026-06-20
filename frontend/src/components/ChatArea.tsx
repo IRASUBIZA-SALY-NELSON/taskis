@@ -12,6 +12,7 @@ import { renderRich } from '@/lib/rich';
 import LinkPreview, { firstUrl } from './LinkPreview';
 import HoverCard from './HoverCard';
 import { searchEmoji } from '@/lib/emoji';
+import { useCustomEmojis } from '@/lib/customEmoji';
 import { isMuted, toggleMute, playTick } from '@/lib/notify';
 import { Bell, BellOff, ArrowDown } from 'lucide-react';
 
@@ -22,6 +23,7 @@ const authH = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}`,
 
 export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaProps) {
   const { confirm, toast } = useToast();
+  const { map: customMap } = useCustomEmojis();
   const [messages, setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [input, setInput] = useState('');
@@ -469,7 +471,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
 
   const fileNameOf = (url: string) => url.split('/').pop()?.split('_').slice(1).join('_') || 'Document';
 
-  const renderContent = (text: string) => renderRich(text, { members, me: user.username });
+  const renderContent = (text: string) => renderRich(text, { members, me: user.username, custom: customMap });
 
   const detectMention = (val: string, pos: number) => {
     const upto = val.slice(0, pos);
@@ -496,15 +498,16 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     setColonSel(0);
   };
 
-  const insertColon = (emoji: string) => {
+  const insertColon = (text: string) => {
     const ta = taRef.current;
     const pos = ta?.selectionStart ?? input.length;
-    const upto = input.slice(0, pos).replace(/(^|\s):([a-z0-9_+-]{2,})$/i, `$1${emoji} `);
+    const upto = input.slice(0, pos).replace(/(^|\s):([a-z0-9_+-]{2,})$/i, `$1${text} `);
     const next = upto + input.slice(pos);
     setInput(next);
     setColonQuery(null);
     setTimeout(() => { if (ta) { ta.focus(); ta.setSelectionRange(upto.length, upto.length); autoGrow(); } }, 0);
   };
+  const pickColon = (item: any) => insertColon(item.custom ? `:${item.name}:` : item.e);
 
   const autoGrow = () => {
     const ta = taRef.current;
@@ -515,7 +518,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     if (colonQuery !== null && emojiMatches.length) {
       if (e.key === 'ArrowDown') { e.preventDefault(); setColonSel((s) => Math.min(s + 1, emojiMatches.length - 1)); return; }
       if (e.key === 'ArrowUp') { e.preventDefault(); setColonSel((s) => Math.max(s - 1, 0)); return; }
-      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); insertColon(emojiMatches[colonSel]); return; }
+      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); pickColon(emojiMatches[colonSel]); return; }
       if (e.key === 'Escape') { setColonQuery(null); return; }
     }
     if (mentionQuery !== null && mentionMatches.length) {
@@ -587,7 +590,10 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     .filter((m) => m.username && m.username !== 'Taskis Bot' && m.username.toLowerCase().startsWith(mentionQuery.toLowerCase()))
     .slice(0, 6);
 
-  const emojiMatches = colonQuery === null ? [] : searchEmoji(colonQuery).slice(0, 9);
+  const emojiMatches: { custom: boolean; e?: string; name?: string; url?: string }[] = colonQuery === null ? [] : [
+    ...Object.keys(customMap).filter((n) => n.includes(colonQuery.toLowerCase())).slice(0, 5).map((n) => ({ custom: true, name: n, url: customMap[n] })),
+    ...searchEmoji(colonQuery).slice(0, 8).map((e) => ({ custom: false, e })),
+  ].slice(0, 9);
 
   const firstUnreadId = (() => {
     const b = boundaryRef.current;
@@ -1015,8 +1021,10 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
               <form onSubmit={send} className="relative flex items-center gap-1.5 rounded-[14px] border border-border-strong bg-surface-2 p-1.5">
                 {colonQuery !== null && emojiMatches.length > 0 && (
                   <div className="card absolute bottom-full mb-2 left-0 p-1.5 flex gap-1 z-50" style={{ boxShadow: 'var(--shadow-lg), var(--edge-hi)' }}>
-                    {emojiMatches.map((em, i) => (
-                      <button type="button" key={em} onMouseDown={(e) => { e.preventDefault(); insertColon(em); }} onMouseEnter={() => setColonSel(i)} className="text-xl p-1 rounded-md transition-colors" style={i === colonSel ? { background: 'var(--hover)' } : undefined}>{em}</button>
+                    {emojiMatches.map((item, i) => (
+                      <button type="button" key={item.custom ? `c-${item.name}` : item.e} onMouseDown={(e) => { e.preventDefault(); pickColon(item); }} onMouseEnter={() => setColonSel(i)} className="w-8 h-8 grid place-items-center text-xl p-1 rounded-md transition-colors" style={i === colonSel ? { background: 'var(--hover)' } : undefined} title={item.custom ? `:${item.name}:` : undefined}>
+                        {item.custom ? <img src={item.url} alt="" className="w-5 h-5 object-contain" /> : item.e}
+                      </button>
                     ))}
                   </div>
                 )}

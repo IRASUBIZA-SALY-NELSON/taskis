@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 
-interface Opts { members?: any[]; me?: string }
+interface Opts { members?: any[]; me?: string; custom?: Record<string, string> }
 
 function Spoiler({ text }: { text: string }) {
   const [show, setShow] = useState(false);
@@ -37,11 +37,16 @@ function inline(text: string, opts: Opts, keyBase: string) {
   return text.split(/(`[^`]+`)/g).map((part, i) => {
     const k = `${keyBase}-${i}`;
     if (/^`[^`]+`$/.test(part)) return <code key={k} className="tk-icode">{part.slice(1, -1)}</code>;
-    return part.split(/(\*\*[^*\n]+\*\*|\*[^*\n]+\*|_[^_\n]+_|\|\|[^|\n]+\|\||https?:\/\/[^\s]+|@\w+)/g).map((t, j) => {
+    return part.split(/(\*\*[^*\n]+\*\*|\*[^*\n]+\*|_[^_\n]+_|\|\|[^|\n]+\|\||:[a-z0-9_]+:|https?:\/\/[^\s]+|@\w+)/g).map((t, j) => {
       const kk = `${k}-${j}`;
       if (/^\*\*[^*]+\*\*$/.test(t)) return <strong key={kk} className="font-semibold">{t.slice(2, -2)}</strong>;
       if (/^\*[^*]+\*$/.test(t) || /^_[^_]+_$/.test(t)) return <em key={kk}>{t.slice(1, -1)}</em>;
       if (/^\|\|[^|]+\|\|$/.test(t)) return <Spoiler key={kk} text={t.slice(2, -2)} />;
+      if (/^:[a-z0-9_]+:$/.test(t)) {
+        const url = opts.custom?.[t.slice(1, -1)];
+        if (url) return <img key={kk} src={url} alt={t} title={t} className="inline-block align-text-bottom" style={{ height: '1.35em', width: 'auto', margin: '0 1px' }} />;
+        return <span key={kk}>{t}</span>;
+      }
       if (/^https?:\/\//.test(t)) return <a key={kk} href={t} target="_blank" rel="noopener noreferrer" className="underline text-accent-text break-all hover:opacity-80">{t}</a>;
       if (/^@\w+$/.test(t)) {
         const name = t.slice(1);
