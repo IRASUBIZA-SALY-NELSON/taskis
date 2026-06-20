@@ -9,6 +9,7 @@ import PostsFeed from '@/components/PostsFeed';
 import NotificationManager from '@/components/NotificationManager';
 import CommandPalette from '@/components/CommandPalette';
 import ShortcutsHelp from '@/components/ShortcutsHelp';
+import GlobalSearch from '@/components/GlobalSearch';
 import { initThemeWatcher } from '@/lib/theme';
 
 export default function AppShell({ initialChannel = 'general' }: { initialChannel?: string }) {
@@ -48,6 +49,7 @@ export default function AppShell({ initialChannel = 'general' }: { initialChanne
     <div className="flex h-screen overflow-hidden">
       <NotificationManager user={user} />
       <CommandPalette user={user} onNavigate={setActiveChannel} />
+      <GlobalSearch onNavigate={setActiveChannel} />
       <ShortcutsHelp />
       <Sidebar
         user={user}

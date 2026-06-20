@@ -66,6 +66,7 @@ export default function CommandPalette({ user, onNavigate }: { user: any; onNavi
         run: () => go(dm(op)),
         group: 'People',
       })),
+      { id: 'search', label: 'Search messages', hint: '⌘/', icon: <Search className="w-[15px] h-[15px]" />, run: () => { setOpen(false); window.dispatchEvent(new Event('open-search')); }, group: 'Actions' },
       { id: 'theme', label: 'Toggle theme', icon: <span className="relative w-[15px] h-[15px]"><Sun className="w-[15px] h-[15px] absolute dark:opacity-0" /><Moon className="w-[15px] h-[15px] absolute opacity-0" /></span>, run: () => { toggleTheme(); setOpen(false); }, group: 'Actions' },
       ...(isAdmin ? [{ id: 'admin', label: 'Admin panel', icon: <Shield className="w-[15px] h-[15px]" />, run: () => { router.push('/admin'); setOpen(false); }, group: 'Actions' } as Cmd] : []),
       { id: 'logout', label: 'Log out', icon: <LogOut className="w-[15px] h-[15px]" />, run: logout, group: 'Actions' },

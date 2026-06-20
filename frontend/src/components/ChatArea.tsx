@@ -219,6 +219,17 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     return () => clearTimeout(t);
   }, [channel, isBot]);
 
+  // Jump to a specific message after navigating from global search.
+  useEffect(() => {
+    let jid: string | null = null;
+    try { jid = sessionStorage.getItem('taskis-jump'); } catch { jid = null; }
+    if (!jid || !messages.some((m) => String(m.id) === jid)) return;
+    try { sessionStorage.removeItem('taskis-jump'); } catch { /* ignore */ }
+    setHighlightId(Number(jid));
+    setTimeout(() => { document.querySelector(`[data-mid="${jid}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 220);
+    setTimeout(() => setHighlightId((h) => (h === Number(jid) ? null : h)), 2000);
+  }, [messages]);
+
   const onScroll = () => {
     const el = scrollRef.current;
     if (!el) return;
