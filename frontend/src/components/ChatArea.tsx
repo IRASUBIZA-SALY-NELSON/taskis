@@ -15,7 +15,7 @@ import VoiceNote from './VoiceNote';
 import { searchEmoji } from '@/lib/emoji';
 import { useCustomEmojis } from '@/lib/customEmoji';
 import { isMuted, toggleMute, playTick } from '@/lib/notify';
-import { Bell, BellOff, ArrowDown } from 'lucide-react';
+import { Bell, BellOff, ArrowDown, Bold, Italic, Code, Link as LinkIcon } from 'lucide-react';
 
 interface ChatAreaProps { user: any; channel: string; onToggleSidebar: () => void; }
 
@@ -61,6 +61,8 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   const [dragOver, setDragOver] = useState(false);
   const [muteVer, setMuteVer] = useState(0);
   const [farUp, setFarUp] = useState(false);
+  const [threadRoot, setThreadRoot] = useState<any>(null);
+  const [threadInput, setThreadInput] = useState('');
   const mediaRecRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const recTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -464,6 +466,17 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     setUnlockLoading(false);
   };
 
+  const repliesOf = (id: number) => messages.filter((m) => m.replyTo?.id === id && !m.deleted);
+
+  const sendThread = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!threadInput.trim() || !threadRoot) return;
+    const content = threadInput;
+    setThreadInput('');
+    await fetch(api('/api/chat/send'), { method: 'POST', headers: authH(), body: JSON.stringify({ content, channel, replyToId: threadRoot.id }) });
+    fetchMsgs();
+  };
+
   const fmt = (d: string) => new Date(d).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const sameDay = (a: string, b: string) => new Date(a).toDateString() === new Date(b).toDateString();
   const readByOthers = (msg: any) => (msg.readBy || '').split(',').map((s: string) => s.trim()).some((u: string) => u && u !== user.username);
@@ -538,6 +551,20 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     setInput(next);
     setTimeout(() => { ta.focus(); ta.setSelectionRange(s + pre.length, s + pre.length + sel.length); autoGrow(); }, 0);
   };
+
+  const insertLink = () => {
+    const ta = taRef.current;
+    if (!ta) return;
+    const s = ta.selectionStart ?? 0;
+    const e = ta.selectionEnd ?? 0;
+    const sel = input.slice(s, e) || 'text';
+    const next = `${input.slice(0, s)}[${sel}](url)${input.slice(e)}`;
+    setInput(next);
+    const urlStart = s + 1 + sel.length + 2;
+    setTimeout(() => { ta.focus(); ta.setSelectionRange(urlStart, urlStart + 3); autoGrow(); }, 0);
+  };
+
+  const fmtBtn = 'w-7 h-7 grid place-items-center rounded-md text-t3 hover:text-t1 hover:bg-hover transition-colors';
 
   const autoGrow = () => {
     const ta = taRef.current;
@@ -673,6 +700,26 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   };
 
   const actionBtnCls = 'w-[26px] h-[26px] grid place-items-center rounded-lg bg-surface-2 border border-border text-t2 hover:text-t1 hover:border-border-strong transition-colors cursor-pointer';
+
+  const ThreadRow = ({ m }: { m: any }) => {
+    const src = m.sender?.avatarUrl ? (m.sender.avatarUrl.startsWith('http') ? m.sender.avatarUrl : api(m.sender.avatarUrl)) : null;
+    const me = m.sender?.username === user.username;
+    return (
+      <div className="flex gap-2.5">
+        <span className="relative w-7 h-7 rounded-full grid place-items-center flex-none text-[11px] font-semibold text-white overflow-hidden mt-0.5" style={{ background: src ? 'transparent' : toneFor(m.sender?.username || '?') }}>
+          {src ? <img src={src} alt="" className="absolute inset-0 w-full h-full object-cover" /> : initials(m.sender?.username || '?')}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline gap-2">
+            <span className="text-[13px] font-semibold text-t1">{me ? 'You' : displayOf(m.sender)}</span>
+            <span className="text-[11px] text-t3">{fmt(m.timestamp)}</span>
+          </div>
+          {m.content && <div className="text-[14px] text-t1 leading-relaxed whitespace-pre-wrap break-words mt-0.5">{m.deleted ? '[deleted]' : renderContent(m.content)}</div>}
+          {!m.deleted && <Attachment msg={m} mine={me} />}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div
@@ -928,21 +975,54 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                       </div>
                     )}
 
-                    {/* delivery / read receipt (own) */}
-                    {isMe && !isDeleted && (
-                      <div className="flex items-center gap-1 mt-1 text-[10.5px]">
-                        {msg._sending ? (
-                          <span className="text-t3 italic">Sending…</span>
-                        ) : msg._failed ? (
-                          <button onClick={() => retrySend(msg)} className="text-danger hover:underline">Failed · retry</button>
-                        ) : (
-                          <span className="flex items-center gap-1 text-t3">
-                            <CheckCheck className="w-3 h-3" style={readByOthers(msg) ? { color: 'var(--accent-text)' } : undefined} />
-                            {readByOthers(msg) ? 'Seen' : 'Sent'}
+                    {/* thread summary */}
+                    {(() => {
+                      const tr = repliesOf(msg.id);
+                      if (tr.length === 0) return null;
+                      const parts: any[] = [];
+                      tr.forEach((r) => { if (!parts.some((p) => p.username === r.sender?.username)) parts.push(r.sender); });
+                      const lastAt = tr[tr.length - 1]?.timestamp;
+                      return (
+                        <button onClick={() => setThreadRoot(msg)} className={`flex items-center gap-2 mt-1.5 pl-1 pr-3 py-1 rounded-full hover:bg-hover transition-colors ${isMe ? 'self-end' : 'self-start'}`}>
+                          <span className="flex -space-x-1.5">
+                            {parts.slice(0, 3).map((p, pi) => {
+                              const psrc = p?.avatarUrl ? (p.avatarUrl.startsWith('http') ? p.avatarUrl : api(p.avatarUrl)) : null;
+                              return (
+                                <span key={pi} className="relative w-[18px] h-[18px] rounded-full grid place-items-center text-[9px] font-semibold text-white overflow-hidden" style={{ background: psrc ? 'transparent' : toneFor(p?.username || '?'), border: '1.5px solid var(--surface-1)' }}>
+                                  {psrc ? <img src={psrc} alt="" className="absolute inset-0 w-full h-full object-cover" /> : initials(p?.username || '?')}
+                                </span>
+                              );
+                            })}
                           </span>
-                        )}
-                      </div>
-                    )}
+                          <span className="text-[12.5px] font-medium text-accent-text">{tr.length} {tr.length === 1 ? 'reply' : 'replies'}</span>
+                          <span className="text-[11.5px] text-t3">Last reply {fmt(lastAt)}</span>
+                          <ArrowDown className="w-3 h-3 text-t3 -rotate-90" />
+                        </button>
+                      );
+                    })()}
+
+                    {/* delivery / read receipt (own) */}
+                    {isMe && !isDeleted && (() => {
+                      const readers = (msg.readBy || '').split(',').map((s: string) => s.trim()).filter((u: string) => u && u !== user.username);
+                      const nameOf = (u: string) => { const mm = members.find((x) => x.username === u); return mm ? displayOf(mm) : u; };
+                      const label = readers.length === 0
+                        ? 'Sent'
+                        : `Seen by ${readers.slice(0, 2).map(nameOf).join(', ')}${readers.length > 2 ? ` +${readers.length - 2}` : ''}`;
+                      return (
+                        <div className="flex items-center gap-1 mt-1 text-[10.5px]">
+                          {msg._sending ? (
+                            <span className="text-t3 italic">Sending…</span>
+                          ) : msg._failed ? (
+                            <button onClick={() => retrySend(msg)} className="text-danger hover:underline">Failed · retry</button>
+                          ) : (
+                            <span className="flex items-center gap-1 text-t3" title={readers.map(nameOf).join(', ')}>
+                              <CheckCheck className="w-3 h-3" style={readers.length ? { color: 'var(--accent-text)' } : undefined} />
+                              {label}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </motion.div>
               </React.Fragment>
@@ -1051,6 +1131,13 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                   )}
                 </div>
               )}
+              <div className="flex items-center gap-0.5 px-1 pb-1.5">
+                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => wrapSelection('**')} className={fmtBtn} title="Bold (⌘B)"><Bold className="w-[14px] h-[14px]" /></button>
+                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => wrapSelection('_')} className={fmtBtn} title="Italic (⌘I)"><Italic className="w-[14px] h-[14px]" /></button>
+                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => wrapSelection('`')} className={fmtBtn} title="Code (⌘E)"><Code className="w-[14px] h-[14px]" /></button>
+                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={insertLink} className={fmtBtn} title="Link"><LinkIcon className="w-[14px] h-[14px]" /></button>
+                <span className="text-[11px] text-t3 ml-1.5">markdown supported</span>
+              </div>
               <form onSubmit={send} className="relative flex items-end gap-1.5 rounded-[22px] border border-border-strong bg-surface-2 p-1.5">
                 {colonQuery !== null && emojiMatches.length > 0 && (
                   <div className="card absolute bottom-full mb-2 left-0 p-1.5 flex gap-1 z-50" style={{ boxShadow: 'var(--shadow-lg), var(--edge-hi)' }}>
@@ -1122,6 +1209,41 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
               </div>
             </form>
           </div>
+        </div>,
+        document.body,
+      )}
+
+      {/* thread panel */}
+      {threadRoot && typeof document !== 'undefined' && createPortal(
+        <div onClick={() => setThreadRoot(null)} className="fixed inset-0 z-[420] flex justify-end tk-fade" style={{ background: 'rgba(7,7,9,0.45)' }}>
+          <motion.div
+            initial={{ x: 40, opacity: 0.6 }} animate={{ x: 0, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 36 }}
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-[440px] max-w-full h-full bg-surface border-l border-border flex flex-col"
+            style={{ boxShadow: 'var(--shadow-lg)' }}
+          >
+            <header className="flex items-center gap-2 px-5 h-[62px] flex-none border-b border-border">
+              <div className="flex-1 min-w-0">
+                <div className="text-[15px] font-semibold text-t1">Thread</div>
+                <div className="text-xs text-t2">{repliesOf(threadRoot.id).length} {repliesOf(threadRoot.id).length === 1 ? 'reply' : 'replies'}</div>
+              </div>
+              <button onClick={() => setThreadRoot(null)} className="icon-btn w-8 h-8" aria-label="Close"><X className="w-[15px] h-[15px]" /></button>
+            </header>
+            <div className="scroll flex-1 overflow-y-auto px-5 py-4 space-y-4">
+              <ThreadRow m={threadRoot} />
+              <div className="flex items-center gap-3 pt-1">
+                <div className="flex-1 h-px bg-border" />
+                <span className="eyebrow" style={{ letterSpacing: '0.04em' }}>{repliesOf(threadRoot.id).length} {repliesOf(threadRoot.id).length === 1 ? 'reply' : 'replies'}</span>
+                <div className="flex-1 h-px bg-border" />
+              </div>
+              {repliesOf(threadRoot.id).map((r) => <ThreadRow key={r.id} m={r} />)}
+            </div>
+            <form onSubmit={sendThread} className="p-3 flex-none border-t border-border flex items-center gap-2">
+              <input value={threadInput} onChange={(e) => setThreadInput(e.target.value)} placeholder="Reply in thread…" className="tk-input flex-1" autoFocus />
+              <button type="submit" disabled={!threadInput.trim()} className="btn-accent w-10 h-10 rounded-full flex-none"><Send className="w-[16px] h-[16px]" /></button>
+            </form>
+          </motion.div>
         </div>,
         document.body,
       )}
