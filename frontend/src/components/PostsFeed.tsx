@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Heart, MessageCircle, Image as ImageIcon, Trash2, Send, X, Smile, Clock, ArrowUp, Sparkles, Menu } from 'lucide-react';
+import { Heart, MessageCircle, Image as ImageIcon, Trash2, Send, X, Smile, Clock, ArrowUp, Sparkles, Menu, ArrowBigUp, ArrowBigDown, Flag } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { initials, toneFor, displayOf } from './Sidebar';
 import { subscribe } from '@/lib/ws';
@@ -77,7 +77,7 @@ function FeedImage({ src, onClick, onDoubleClick }: { src: string; onClick: () =
   );
 }
 
-function PostCard({ post, user, now, onChange, onDelete, onZoom }: { post: any; user: any; now: number; onChange: (p: any) => void; onDelete: (id: number) => void; onZoom: (url: string) => void }) {
+function PostCard({ post, user, now, onChange, onDelete, onReport, onZoom }: { post: any; user: any; now: number; onChange: (p: any) => void; onDelete: (id: number) => void; onReport: (id: number) => void; onZoom: (url: string) => void }) {
   const [showComments, setShowComments] = useState(false);
   const [comments, setComments] = useState<any[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -89,7 +89,13 @@ function PostCard({ post, user, now, onChange, onDelete, onZoom }: { post: any; 
   const renderText = (t: string) => renderRich(t, { custom: customMap });
   const mine = post.author?.username === user.username;
   const liked = (post.likers || []).includes(user.username);
+  const disliked = (post.dislikers || []).includes(user.username);
   const rx = parseRx(post.reactions || '');
+
+  const dislike = async () => {
+    const r = await fetch(api(`/api/posts/${post.id}/dislike`), { method: 'POST', headers: { Authorization: `Bearer ${token()}` } });
+    if (r.ok) onChange(await r.json());
+  };
 
   const toggleComments = () => {
     const next = !showComments;
@@ -154,8 +160,10 @@ function PostCard({ post, user, now, onChange, onDelete, onZoom }: { post: any; 
             <Clock className="w-[12px] h-[12px]" />{expiryLabel(post.expiresAt, now)}
           </span>
         )}
-        {mine && (
+        {mine ? (
           <button onClick={() => onDelete(post.id)} className="icon-btn w-8 h-8" title="Delete post"><Trash2 className="w-[15px] h-[15px]" /></button>
+        ) : (
+          <button onClick={() => onReport(post.id)} className="icon-btn w-8 h-8" title="Report post"><Flag className="w-[15px] h-[15px]" /></button>
         )}
       </div>
 
@@ -179,8 +187,11 @@ function PostCard({ post, user, now, onChange, onDelete, onZoom }: { post: any; 
       )}
 
       <div className="px-3 pt-2.5 flex items-center gap-0.5">
-        <motion.button whileTap={{ scale: 0.88 }} onClick={() => like()} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[13.5px] font-medium hover:bg-hover transition-colors" style={{ color: liked ? 'var(--danger)' : 'var(--t2)' }}>
-          <Heart className="w-[19px] h-[19px]" fill={liked ? 'currentColor' : 'none'} /> {post.likeCount || 0}
+        <motion.button whileTap={{ scale: 0.86 }} onClick={() => like()} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[13.5px] font-medium hover:bg-hover transition-colors" style={{ color: liked ? 'var(--accent-text)' : 'var(--t2)' }} title="Upvote">
+          <ArrowBigUp className="w-[19px] h-[19px]" fill={liked ? 'currentColor' : 'none'} /> {post.likeCount || 0}
+        </motion.button>
+        <motion.button whileTap={{ scale: 0.86 }} onClick={dislike} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[13.5px] font-medium hover:bg-hover transition-colors" style={{ color: disliked ? 'var(--danger)' : 'var(--t2)' }} title="Downvote">
+          <ArrowBigDown className="w-[19px] h-[19px]" fill={disliked ? 'currentColor' : 'none'} /> {post.dislikeCount || 0}
         </motion.button>
         <button onClick={toggleComments} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[13.5px] font-medium text-t2 hover:bg-hover hover:text-t1 transition-colors">
           <MessageCircle className="w-[19px] h-[19px]" /> {post.commentCount || 0}
@@ -278,7 +289,7 @@ export default function PostsFeed({ user, onToggleSidebar }: { user: any; onTogg
   const sentinelRef = useRef<HTMLDivElement>(null);
   const loadingMoreRef = useRef(false);
 
-  const normalize = (p: any) => ({ ...p, likedByMe: (p.likers || []).includes(user.username) });
+  const normalize = (p: any) => ({ ...p, likedByMe: (p.likers || []).includes(user.username), dislikedByMe: (p.dislikers || []).includes(user.username) });
 
   const merge = useCallback((incoming: any[]) => {
     setPosts((prev) => {
@@ -397,6 +408,11 @@ export default function PostsFeed({ user, onToggleSidebar }: { user: any; onTogg
     await fetch(api(`/api/posts/${id}`), { method: 'DELETE', headers: { Authorization: `Bearer ${token()}` } });
     setPosts((prev) => prev.filter((p) => p.id !== id));
   };
+  const onReport = async (id: number) => {
+    if (!(await confirm({ title: 'Report this post?', body: 'An admin will review it and can take action.', confirmText: 'Report', danger: true }))) return;
+    await fetch(api('/api/reports'), { method: 'POST', headers: authJson(), body: JSON.stringify({ type: 'post', targetId: String(id), reason: '' }) });
+    toast('Reported — thanks', 'success');
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -462,7 +478,7 @@ export default function PostsFeed({ user, onToggleSidebar }: { user: any; onTogg
             </div>
           ) : (
             <>
-              {visible.map((p) => <PostCard key={p.id} post={p} user={user} now={now} onChange={onChange} onDelete={onDelete} onZoom={setZoom} />)}
+              {visible.map((p) => <PostCard key={p.id} post={p} user={user} now={now} onChange={onChange} onDelete={onDelete} onReport={onReport} onZoom={setZoom} />)}
               <div ref={sentinelRef} className="h-px" />
               {loadingMore && <div className="flex justify-center py-2"><span className="w-5 h-5 rounded-full border-2 border-border border-t-accent tk-spin" /></div>}
               {!hasMore && visible.length > 4 && <div className="text-center text-[12px] text-t3 py-3">You're all caught up</div>}

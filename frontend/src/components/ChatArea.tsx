@@ -16,7 +16,7 @@ import { copyToClipboard } from '@/lib/clipboard';
 import { searchEmoji } from '@/lib/emoji';
 import { useCustomEmojis } from '@/lib/customEmoji';
 import { isMuted, toggleMute, playTick } from '@/lib/notify';
-import { Bell, BellOff, ArrowDown, Bold, Italic, Code, Link as LinkIcon, Strikethrough } from 'lucide-react';
+import { Bell, BellOff, ArrowDown, Bold, Italic, Code, Link as LinkIcon, Strikethrough, Flag } from 'lucide-react';
 
 interface ChatAreaProps { user: any; channel: string; onToggleSidebar: () => void; }
 
@@ -450,6 +450,13 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     else toast('Could not copy', 'error');
   };
 
+  const reportMsg = async (m: any) => {
+    setMenuId(null);
+    if (!(await confirm({ title: 'Report this message?', body: 'An admin will review it and can take action.', confirmText: 'Report', danger: true }))) return;
+    await fetch(api('/api/reports'), { method: 'POST', headers: authH(), body: JSON.stringify({ type: 'message', targetId: String(m.id), reason: '' }) });
+    toast('Reported — thanks', 'success');
+  };
+
   const submitEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     const r = await fetch(api(`/api/chat/messages/${editMsg.id}`), { method: 'PUT', headers: authH(), body: JSON.stringify({ content: editVal }) });
@@ -502,7 +509,11 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     return d.toLocaleDateString(undefined, { month: 'long', day: 'numeric' });
   };
 
-  const fileNameOf = (url: string) => url.split('/').pop()?.split('_').slice(1).join('_') || 'Document';
+  const fileNameOf = (url: string) => {
+    const last = decodeURIComponent((url.split('/').pop() || '').split('?')[0]);
+    if (/^[0-9a-fA-F-]{16,40}_/.test(last)) return last.split('_').slice(1).join('_') || 'Document'; // legacy /uploads/<uuid>_name
+    return last || 'Document';
+  };
 
   const renderContent = (text: string) => renderRich(text, { members, me: user.username, custom: customMap });
 
@@ -695,7 +706,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
           <div className="text-[13.5px] font-medium text-t1 truncate">{fileNameOf(msg.attachmentUrl)}</div>
           <div className="text-xs text-t3 uppercase">{msg.attachmentType?.split('/')[1] || 'file'}</div>
         </div>
-        <a href={full} download target="_blank" rel="noreferrer" className="icon-btn w-[30px] h-[30px] border-0" aria-label="Download"><Download className="w-[15px] h-[15px]" /></a>
+        <a href={full.includes('/api/files/') ? `${full}?dl=1` : full} download target="_blank" rel="noreferrer" className="icon-btn w-[30px] h-[30px] border-0" aria-label="Download"><Download className="w-[15px] h-[15px]" /></a>
       </div>
     );
   };
@@ -951,6 +962,9 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                                 <button onClick={() => toggleSave(msg.id)} className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-t1 hover:bg-hover transition-colors">{savedIds.has(msg.id) ? <BookmarkCheck className="w-[14px] h-[14px] text-accent-text" /> : <Bookmark className="w-[14px] h-[14px] text-t2" />} {savedIds.has(msg.id) ? 'Unsave' : 'Save'}</button>
                                 {canEdit && (
                                   <button onClick={() => startEdit(msg)} className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-t1 hover:bg-hover transition-colors"><Pencil className="w-[14px] h-[14px] text-t2" /> Edit</button>
+                                )}
+                                {!isMe && (
+                                  <button onClick={() => reportMsg(msg)} className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-t1 hover:bg-hover transition-colors"><Flag className="w-[14px] h-[14px] text-t2" /> Report</button>
                                 )}
                                 {isMe && (
                                   <button onClick={() => deleteMsg(msg.id)} className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-danger hover:bg-danger-soft transition-colors"><Trash2 className="w-[14px] h-[14px]" /> Delete</button>
