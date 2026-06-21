@@ -54,12 +54,15 @@ public class PostController {
         return m;
     }
 
-    private List<String> likers(Post p) {
-        if (p.getLikedBy() == null || p.getLikedBy().isBlank()) return new ArrayList<>();
-        List<String> l = new ArrayList<>(Arrays.asList(p.getLikedBy().split(",")));
+    private List<String> csv(String s) {
+        if (s == null || s.isBlank()) return new ArrayList<>();
+        List<String> l = new ArrayList<>(Arrays.asList(s.split(",")));
         l.removeIf(String::isBlank);
         return l;
     }
+
+    private List<String> likers(Post p) { return csv(p.getLikedBy()); }
+    private List<String> dislikers(Post p) { return csv(p.getDislikedBy()); }
 
     private Map<String, Object> postDto(Post p, String me) {
         List<String> likes = likers(p);
@@ -70,9 +73,13 @@ public class PostController {
         m.put("caption", p.getCaption());
         m.put("createdAt", p.getCreatedAt());
         m.put("expiresAt", new Date(p.getCreatedAt().getTime() + ScheduledTasks.POST_TTL_MS));
+        List<String> dislikes = dislikers(p);
         m.put("likeCount", likes.size());
         m.put("likedByMe", me != null && likes.contains(me));
         m.put("likers", likes);
+        m.put("dislikeCount", dislikes.size());
+        m.put("dislikedByMe", me != null && dislikes.contains(me));
+        m.put("dislikers", dislikes);
         m.put("reactions", p.getReactions() == null ? "" : p.getReactions());
         m.put("commentCount", commentRepository.countByPostId(p.getId()));
         return m;
@@ -152,8 +159,26 @@ public class PostController {
         if (p == null) return ResponseEntity.notFound().build();
         String me = principal.getName();
         List<String> likes = likers(p);
-        if (likes.contains(me)) likes.remove(me); else likes.add(me);
+        List<String> dislikes = dislikers(p);
+        if (likes.contains(me)) { likes.remove(me); } else { likes.add(me); dislikes.remove(me); }
         p.setLikedBy(String.join(",", likes));
+        p.setDislikedBy(String.join(",", dislikes));
+        postRepository.save(p);
+        broadcast("updated", postDto(p, null));
+        return ResponseEntity.ok(postDto(p, me));
+    }
+
+    @PostMapping("/{id}/dislike")
+    public ResponseEntity<?> dislike(@PathVariable Long id, Principal principal) {
+        if (principal == null) return ResponseEntity.status(401).body("Unauthorized");
+        Post p = postRepository.findById(id).orElse(null);
+        if (p == null) return ResponseEntity.notFound().build();
+        String me = principal.getName();
+        List<String> likes = likers(p);
+        List<String> dislikes = dislikers(p);
+        if (dislikes.contains(me)) { dislikes.remove(me); } else { dislikes.add(me); likes.remove(me); }
+        p.setLikedBy(String.join(",", likes));
+        p.setDislikedBy(String.join(",", dislikes));
         postRepository.save(p);
         broadcast("updated", postDto(p, null));
         return ResponseEntity.ok(postDto(p, me));

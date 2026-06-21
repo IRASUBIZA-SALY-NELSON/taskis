@@ -443,6 +443,9 @@ public class ChatController {
         return ResponseEntity.ok(saved);
     }
 
+    @Autowired
+    private com.taskis.backend.security.FileCrypto fileCrypto;
+
     @PostMapping("/upload")
     public ResponseEntity<?> uploadFile(@RequestParam("file") MultipartFile file) {
         try {
@@ -450,18 +453,19 @@ public class ChatController {
             Files.createDirectories(base);
 
             String original = file.getOriginalFilename() == null ? "file" : file.getOriginalFilename();
-            // Drop any path component and keep only a safe, flat filename to prevent traversal.
             String safeName = Paths.get(original).getFileName().toString().replaceAll("[^A-Za-z0-9._-]", "_");
-            String fileName = UUID.randomUUID().toString() + "_" + safeName;
+            String type = file.getContentType() == null ? "application/octet-stream" : file.getContentType();
 
-            Path filePath = base.resolve(fileName).normalize();
-            if (!filePath.startsWith(base)) {
-                return ResponseEntity.badRequest().body("Invalid file path");
-            }
-            Files.copy(file.getInputStream(), filePath);
+            // Random on-disk name + AES-encrypted contents → uploads folder is unreadable on disk.
+            String id = UUID.randomUUID().toString().replace("-", "");
+            Path filePath = base.resolve(id).normalize();
+            if (!filePath.startsWith(base)) return ResponseEntity.badRequest().body("Invalid file path");
+            Files.write(filePath, fileCrypto.encrypt(file.getBytes()));
+            Files.writeString(base.resolve(id + ".meta"), type);
 
-            return ResponseEntity.ok(Map.of("url", "/uploads/" + fileName, "type",
-                    file.getContentType() == null ? "application/octet-stream" : file.getContentType()));
+            // The original (display) name lives only in the URL, stored encrypted in the DB.
+            String url = "/api/files/" + id + "/" + java.net.URLEncoder.encode(safeName, "UTF-8").replace("+", "%20");
+            return ResponseEntity.ok(Map.of("url", url, "type", type));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body("Could not upload file: " + e.getMessage());
         }

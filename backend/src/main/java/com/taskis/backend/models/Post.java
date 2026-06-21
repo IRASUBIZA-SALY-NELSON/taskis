@@ -22,9 +22,12 @@ public class Post {
     @Column(length = 2048)
     private String caption;
 
-    // Comma-separated usernames who liked the post.
+    // Comma-separated usernames who up-voted / down-voted the post.
     @Column(length = 8192)
     private String likedBy = "";
+
+    @Column(length = 8192)
+    private String dislikedBy = "";
 
     // Emoji reactions, stored as "emoji:user1,user2;emoji2:user3".
     @Column(length = 8192)

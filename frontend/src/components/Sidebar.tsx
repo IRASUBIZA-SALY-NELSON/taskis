@@ -115,7 +115,7 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
   return (
     <>
       {isOpen && <div onClick={() => setIsOpen(false)} className="fixed inset-0 bg-black/40 z-30 lg:hidden" aria-hidden />}
-      <aside className={`w-[264px] flex-none flex flex-col h-full bg-surface border-r border-border fixed lg:static inset-y-0 left-0 z-40 transition-transform duration-200 lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`w-[264px] flex-none flex flex-col h-full bg-surface border-r border-border fixed lg:static inset-y-0 left-0 z-40 transition-transform duration-200 ${isOpen ? 'translate-x-0' : '-translate-x-full lg:hidden'}`}>
       {/* header */}
       <div className="flex items-center gap-[9px] px-4 pt-4 pb-[13px] border-b border-border">
         <span className="tk-mark" style={{ width: 26, height: 26, borderRadius: 8 }}>

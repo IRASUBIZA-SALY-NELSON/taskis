@@ -12,6 +12,7 @@ export default function AdminDashboard() {
   const { confirm, toast } = useToast();
   const [users, setUsers] = useState<any[]>([]);
   const [keys, setKeys] = useState<any[]>([]);
+  const [reports, setReports] = useState<any[]>([]);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [newUsername, setNewUsername] = useState('');
   const [loading, setLoading] = useState(false);
@@ -31,13 +32,24 @@ export default function AdminDashboard() {
 
   const fetchData = async () => {
     try {
-      const [uRes, kRes] = await Promise.all([
+      const [uRes, kRes, rRes] = await Promise.all([
         fetch(api('/api/admin/users'), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }),
         fetch(api('/api/admin/keys'), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }),
+        fetch(api('/api/reports'), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }),
       ]);
       setUsers(await uRes.json());
       setKeys(await kRes.json());
+      if (rRes.ok) setReports(await rRes.json());
     } catch (e) { console.error(e); }
+  };
+
+  const resolveReport = async (id: number) => {
+    await fetch(api(`/api/reports/${id}/resolve`), { method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+    fetchData();
+  };
+  const dismissReport = async (id: number) => {
+    await fetch(api(`/api/reports/${id}`), { method: 'DELETE', headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+    fetchData();
   };
 
   const setActive = async (id: number, active: boolean) => {
@@ -207,6 +219,34 @@ export default function AdminDashboard() {
           {members.length === 0 && (
             <div className="px-[22px] py-12 text-center text-t3 text-sm">No personnel found.</div>
           )}
+        </section>
+
+        {/* reports */}
+        <section className="card overflow-hidden">
+          <div className="flex items-center gap-2.5 px-[22px] pt-[18px] pb-3.5 border-b border-border">
+            <h2 className="text-[15px] font-semibold text-t1 flex-1">Reports</h2>
+            <span className="text-[12.5px] text-t3">{reports.filter((r) => !r.resolved).length} open</span>
+          </div>
+          {reports.length === 0 ? (
+            <div className="px-[22px] py-10 text-center text-t3 text-sm">No reports. All quiet. 🌿</div>
+          ) : reports.map((r) => (
+            <div key={r.id} className={`px-[22px] py-3.5 border-b border-border last:border-b-0 ${r.resolved ? 'opacity-50' : ''}`}>
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full" style={{ background: 'var(--danger-soft)', color: 'var(--danger)' }}>{r.type}</span>
+                <span className="text-[13px] text-t2">by <span className="font-medium text-t1">{r.authorName || 'unknown'}</span></span>
+                <span className="text-[12px] text-t3">· reported by {r.reportedBy}</span>
+                {r.resolved && <span className="text-[11px] text-online ml-1">resolved</span>}
+              </div>
+              <div className="text-[13.5px] text-t1 bg-surface-2 border border-border rounded-xl px-3 py-2 mb-2 whitespace-pre-wrap break-words">{r.snapshot || <span className="text-t3 italic">(no text)</span>}</div>
+              {r.reason && <div className="text-[12.5px] text-t2 mb-2">Reason: {r.reason}</div>}
+              {!r.resolved && (
+                <div className="flex gap-2">
+                  <button onClick={() => resolveReport(r.id)} className="btn-secondary px-3 py-1.5 text-[12.5px]"><Check className="w-[13px] h-[13px]" /> Mark resolved</button>
+                  <button onClick={() => dismissReport(r.id)} className="btn-secondary px-3 py-1.5 text-[12.5px]">Dismiss</button>
+                </div>
+              )}
+            </div>
+          ))}
         </section>
       </div>
     </div>
