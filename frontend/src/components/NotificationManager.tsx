@@ -27,10 +27,19 @@ export default function NotificationManager({ user }: { user: any }) {
 
     const handle = (tag: string) => (msg: any) => {
       if (!msg || msg.id == null || seen.current.has(msg.id)) return;
-      seen.current.add(msg.id); // dedupe edits/reactions/read-receipt rebroadcasts
+      seen.current.add(msg.id);
       const from = msg.sender?.username;
       if (!from || from === user.username) return;
       if (isMuted(tag)) return; // channel muted — stay quiet
+
+      // Only notify for *fresh* messages. The server re-broadcasts a message
+      // whenever it's read/reacted/edited; those carry readBy/reactions/edited,
+      // so we skip them — this kills the phantom "message that doesn't exist".
+      const rx = (msg.reactions || '').trim();
+      const readBy = (msg.readBy || '').trim();
+      const isFresh = !msg.edited && (rx === '' || rx === '{}') && readBy === '';
+      if (!isFresh) return;
+
       const prefs = getNotifyPrefs();
       const mention = mentionsMe(msg.content || '');
       const name = displayOf(msg.sender);
@@ -38,11 +47,11 @@ export default function NotificationManager({ user }: { user: any }) {
         unread.current += 1;
         document.title = `(${unread.current}) Taskis`;
         if (prefs.desktop) {
-          showNotification(mention ? `${name} mentioned you` : name, {
-            body: msg.content || 'Sent an attachment',
-            url: '/chat',
-            tag,
-          });
+          const n = unread.current;
+          showNotification(
+            n > 1 ? `Taskis · ${n} new messages` : (mention ? `${name} mentioned you` : name),
+            { body: `${name}: ${msg.content || 'sent an attachment'}`, url: '/chat', tag: 'taskis-aggregate' },
+          );
         }
         if (prefs.sound) playPing();
       } else if (mention && prefs.sound) {

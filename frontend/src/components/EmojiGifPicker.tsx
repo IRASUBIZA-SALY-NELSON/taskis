@@ -88,6 +88,7 @@ export default function EmojiGifPicker({ onEmoji, onGif, onClose, align = 'left'
           {(['emoji', 'gif', 'custom'] as const).map((t) => (
             <button
               key={t}
+              type="button"
               onClick={() => { setTab(t); setQ(''); }}
               className="flex-1 py-2 text-[12px] font-semibold uppercase tracking-wider transition-colors"
               style={tab === t ? { color: 'var(--accent-text)', boxShadow: 'inset 0 -2px 0 var(--accent)' } : { color: 'var(--t3)' }}
@@ -139,7 +140,7 @@ export default function EmojiGifPicker({ onEmoji, onGif, onClose, align = 'left'
           {q.trim() ? (
             <div className="grid grid-cols-8 gap-0.5">
               {emojis.map((e, i) => (
-                <button key={i} onClick={() => onEmoji(e)} className="text-xl p-1 rounded-md hover:bg-hover transition-colors">{e}</button>
+                <button key={i} type="button" onClick={() => onEmoji(e)} className="text-xl p-1 rounded-md hover:bg-hover transition-colors">{e}</button>
               ))}
               {emojis.length === 0 && <div className="col-span-8 text-center text-[12px] text-t3 py-4">No emoji found</div>}
             </div>
@@ -149,7 +150,7 @@ export default function EmojiGifPicker({ onEmoji, onGif, onClose, align = 'left'
                 <div className="eyebrow px-1 py-1" style={{ fontSize: 10 }}>{g.name}</div>
                 <div className="grid grid-cols-8 gap-0.5">
                   {g.items.map((it, i) => (
-                    <button key={i} onClick={() => onEmoji(it.e)} className="text-xl p-1 rounded-md hover:bg-hover transition-colors">{it.e}</button>
+                    <button key={i} type="button" onClick={() => onEmoji(it.e)} className="text-xl p-1 rounded-md hover:bg-hover transition-colors">{it.e}</button>
                   ))}
                 </div>
               </div>
@@ -165,7 +166,7 @@ export default function EmojiGifPicker({ onEmoji, onGif, onClose, align = 'left'
           ) : (
             <div className="grid grid-cols-2 gap-1.5">
               {gifs.map((g) => (
-                <button key={g.id} onClick={() => onGif?.(g.url)} className="rounded-lg overflow-hidden border border-border hover:border-border-strong transition-colors">
+                <button key={g.id} type="button" onClick={() => onGif?.(g.url)} className="rounded-lg overflow-hidden border border-border hover:border-border-strong transition-colors">
                   <img src={g.preview} alt="" className="w-full h-[88px] object-cover block" />
                 </button>
               ))}

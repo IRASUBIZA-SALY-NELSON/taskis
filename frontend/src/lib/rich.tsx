@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Copy, Check } from 'lucide-react';
+import { copyToClipboard } from './clipboard';
 
 interface Opts { members?: any[]; me?: string; custom?: Record<string, string> }
 
@@ -44,7 +45,7 @@ function Spoiler({ text }: { text: string }) {
 
 function CodeBlock({ code, lang }: { code: string; lang?: string }) {
   const [copied, setCopied] = useState(false);
-  const copy = () => navigator.clipboard.writeText(code).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }).catch(() => {});
+  const copy = async () => { if (await copyToClipboard(code)) { setCopied(true); setTimeout(() => setCopied(false), 1500); } };
   return (
     <div className="tk-codeblock">
       <div className="tk-codeblock-head">

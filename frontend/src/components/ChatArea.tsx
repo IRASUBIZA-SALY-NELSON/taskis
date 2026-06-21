@@ -12,10 +12,11 @@ import { renderRich } from '@/lib/rich';
 import LinkPreview, { firstUrl } from './LinkPreview';
 import HoverCard from './HoverCard';
 import VoiceNote from './VoiceNote';
+import { copyToClipboard } from '@/lib/clipboard';
 import { searchEmoji } from '@/lib/emoji';
 import { useCustomEmojis } from '@/lib/customEmoji';
 import { isMuted, toggleMute, playTick } from '@/lib/notify';
-import { Bell, BellOff, ArrowDown, Bold, Italic, Code, Link as LinkIcon } from 'lucide-react';
+import { Bell, BellOff, ArrowDown, Bold, Italic, Code, Link as LinkIcon, Strikethrough } from 'lucide-react';
 
 interface ChatAreaProps { user: any; channel: string; onToggleSidebar: () => void; }
 
@@ -445,8 +446,8 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
 
   const copyText = async (m: any) => {
     setMenuId(null);
-    try { await navigator.clipboard.writeText(m.content || ''); toast('Copied to clipboard', 'success'); }
-    catch { toast('Could not copy', 'error'); }
+    if (await copyToClipboard(m.content || '')) toast('Copied to clipboard', 'success');
+    else toast('Could not copy', 'error');
   };
 
   const submitEdit = async (e: React.FormEvent) => {
@@ -738,7 +739,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
       )}
       {/* header */}
       <header className="flex items-center gap-[13px] px-[22px] h-[62px] flex-none border-b border-border">
-        <button onClick={onToggleSidebar} className="icon-btn w-8 h-8 lg:hidden" aria-label="Toggle sidebar"><Menu className="w-[15px] h-[15px]" /></button>
+        <button onClick={onToggleSidebar} className="icon-btn w-8 h-8" aria-label="Toggle sidebar" title="Toggle sidebar"><Menu className="w-[15px] h-[15px]" /></button>
         {isChannel && <span className="text-[22px] font-medium text-t3 leading-none">#</span>}
         {isBot && <span className="w-[30px] h-[30px] rounded-lg bg-accent-soft text-accent-text text-[13px] font-bold grid place-items-center flex-none">TB</span>}
         {isDm && (
@@ -1134,9 +1135,9 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
               <div className="flex items-center gap-0.5 px-1 pb-1.5">
                 <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => wrapSelection('**')} className={fmtBtn} title="Bold (⌘B)"><Bold className="w-[14px] h-[14px]" /></button>
                 <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => wrapSelection('_')} className={fmtBtn} title="Italic (⌘I)"><Italic className="w-[14px] h-[14px]" /></button>
+                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => wrapSelection('~~')} className={fmtBtn} title="Strikethrough"><Strikethrough className="w-[14px] h-[14px]" /></button>
                 <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => wrapSelection('`')} className={fmtBtn} title="Code (⌘E)"><Code className="w-[14px] h-[14px]" /></button>
                 <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={insertLink} className={fmtBtn} title="Link"><LinkIcon className="w-[14px] h-[14px]" /></button>
-                <span className="text-[11px] text-t3 ml-1.5">markdown supported</span>
               </div>
               <form onSubmit={send} className="relative flex items-end gap-1.5 rounded-[22px] border border-border-strong bg-surface-2 p-1.5">
                 {colonQuery !== null && emojiMatches.length > 0 && (

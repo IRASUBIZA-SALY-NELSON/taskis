@@ -141,7 +141,7 @@ function PostCard({ post, user, now, onChange, onDelete, onZoom }: { post: any; 
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: 'spring', stiffness: 320, damping: 30 }}
-      className="card overflow-hidden transition-colors hover:border-border-strong"
+      className="card transition-colors hover:border-border-strong"
     >
       <div className="flex items-center gap-3 px-4 py-3">
         <Avatar u={post.author} />
@@ -401,7 +401,7 @@ export default function PostsFeed({ user, onToggleSidebar }: { user: any; onTogg
   return (
     <div className="flex flex-col h-full">
       <header className="flex items-center gap-[13px] px-[22px] h-[62px] flex-none border-b border-border">
-        {onToggleSidebar && <button onClick={onToggleSidebar} className="icon-btn w-8 h-8 lg:hidden" aria-label="Toggle sidebar"><Menu className="w-[15px] h-[15px]" /></button>}
+        {onToggleSidebar && <button onClick={onToggleSidebar} className="icon-btn w-8 h-8" aria-label="Toggle sidebar" title="Toggle sidebar"><Menu className="w-[15px] h-[15px]" /></button>}
         <div className="flex-1 min-w-0">
           <div className="serif text-[18px] font-semibold text-t1 leading-tight">Feed</div>
           <div className="text-xs text-t2 mt-px flex items-center gap-1.5"><Clock className="w-[11px] h-[11px]" />Posts vanish 24 hours after sharing</div>
