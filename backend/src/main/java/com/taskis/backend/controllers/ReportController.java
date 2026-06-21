@@ -31,6 +31,21 @@ public class ReportController {
         return u != null && "ADMIN".equals(u.getRole());
     }
 
+    private boolean canAccessChannel(User user, String channel) {
+        if (user == null) return false;
+        if (channel == null) return true;
+        if (channel.startsWith("dm_")) {
+            String[] parts = channel.split("_");
+            if (parts.length != 3 || user.getId() == null) return false;
+            try {
+                return user.getId().equals(Long.parseLong(parts[1])) || user.getId().equals(Long.parseLong(parts[2]));
+            } catch (NumberFormatException e) {
+                return false;
+            }
+        }
+        return true; // named channels + bot are visible to all members
+    }
+
     @PostMapping
     public ResponseEntity<?> create(@RequestBody Map<String, String> body, Principal principal) {
         if (principal == null) return ResponseEntity.status(401).body("Unauthorized");
@@ -38,11 +53,16 @@ public class ReportController {
         Long targetId;
         try { targetId = Long.parseLong(body.get("targetId")); } catch (Exception e) { return ResponseEntity.badRequest().body("Invalid target"); }
 
+        User reporter = userRepository.findByUsername(principal.getName()).orElse(null);
         String snapshot = "";
         String author = "";
         if ("message".equals(type)) {
             Message m = messageRepository.findById(targetId).orElse(null);
-            if (m != null) { snapshot = m.getContent() == null ? "" : m.getContent(); author = m.getSender() != null ? m.getSender().getUsername() : ""; }
+            if (m != null) {
+                if (!canAccessChannel(reporter, m.getChannel())) return ResponseEntity.status(403).body("Forbidden");
+                snapshot = m.getContent() == null ? "" : m.getContent();
+                author = m.getSender() != null ? m.getSender().getUsername() : "";
+            }
         } else if ("post".equals(type)) {
             Post po = postRepository.findById(targetId).orElse(null);
             if (po != null) { snapshot = po.getCaption() == null ? "" : po.getCaption(); author = po.getAuthor() != null ? po.getAuthor().getUsername() : ""; }
