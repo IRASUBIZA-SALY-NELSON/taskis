@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Hash, Lock, Shield, LogOut, Newspaper, Search } from 'lucide-react';
+import { Hash, Lock, Shield, LogOut, Newspaper, Search, Radar, Megaphone, Bot, Users } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import ThemeToggle from './ThemeToggle';
 import SettingsMenu from './SettingsMenu';
@@ -20,7 +20,7 @@ interface SidebarProps {
   setIsOpen: (o: boolean) => void;
 }
 
-const AVATAR_TONES = ['#5a4a38', '#4a463f', '#574a3e', '#454039', '#5c5044', '#403c37'];
+const AVATAR_TONES = ['#3068f5', '#2f9e54', '#8b5cf6', '#e8833a', '#0ea5a4', '#e0558c'];
 
 export function initials(name: string) {
   return (name || '?').charAt(0).toUpperCase();
@@ -103,13 +103,21 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
     if (typeof window !== 'undefined' && window.innerWidth < 1024) setIsOpen(false);
   };
 
-  const SectionLabel = ({ children }: { children: React.ReactNode }) => (
-    <div className="eyebrow px-[9px] pt-4 pb-[5px]" style={{ letterSpacing: '0.08em' }}>{children}</div>
+  const SectionLabel = ({ icon: Ic, children }: { icon?: React.ComponentType<{ className?: string }>; children: React.ReactNode }) => (
+    <div className="eyebrow flex items-center gap-1.5 px-[9px] pt-4 pb-[5px]" style={{ letterSpacing: '0.08em' }}>
+      {Ic && <Ic className="w-[12px] h-[12px]" />}{children}
+    </div>
   );
 
+  const channelIcon: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
+    general: Hash, intel: Radar, alerts: Megaphone, confidential: Lock,
+  };
+
   const itemCls = (active: boolean) =>
-    `flex items-center gap-[9px] w-full text-left rounded-lg px-[9px] py-[7px] cursor-pointer transition-colors ${
-      active ? 'bg-accent-soft text-t1' : 'text-t2 hover:bg-hover hover:text-t1'
+    `flex items-center gap-[10px] w-full text-left rounded-[10px] px-[10px] py-[7px] cursor-pointer transition-all ${
+      active
+        ? 'bg-surface border border-border text-t1 shadow-[var(--shadow-sm)]'
+        : 'text-t2 border border-transparent hover:bg-hover hover:text-t1'
     }`;
 
   return (
@@ -141,32 +149,33 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
       {/* lists */}
       <div className="scroll flex-1 overflow-y-auto px-2 pt-1.5 pb-2.5">
         <button onClick={() => select('__posts__')} className={itemCls(activeChannel === '__posts__')}>
-          <Newspaper className="w-[15px] h-[15px] flex-none" style={{ color: activeChannel === '__posts__' ? 'var(--accent-text)' : 'var(--t3)' }} />
+          <Newspaper className="w-[15px] h-[15px] flex-none" style={{ color: activeChannel === '__posts__' ? 'var(--t1)' : 'var(--t3)' }} />
           <span className="flex-1 text-sm font-medium">Feed</span>
         </button>
 
-        <SectionLabel>Channels</SectionLabel>
+        <SectionLabel icon={Hash}>Channels</SectionLabel>
         {channels.map((c) => {
           const active = activeChannel === c;
           const locked = c === 'confidential';
+          const Ic = channelIcon[c] || Hash;
           return (
             <button key={c} onClick={() => select(c)} className={itemCls(active)}>
-              <span className="w-3.5 text-center text-[15px] flex-none" style={{ color: active ? 'var(--accent-text)' : 'var(--t3)' }}>#</span>
+              <Ic className="w-[15px] h-[15px] flex-none" style={{ color: active ? 'var(--t1)' : 'var(--t3)' }} />
               <span className="flex-1 text-sm font-medium">{c.charAt(0).toUpperCase() + c.slice(1)}</span>
-              {locked && <Lock className="w-[13px] h-[13px] text-t3" />}
-              {unread[c] && <span className="bg-accent text-on-accent text-[11px] font-semibold min-w-[8px] px-1.5 py-px rounded-full">●</span>}
+              {locked && <Lock className="w-[12px] h-[12px] text-t3" />}
+              {unread[c] && <span className="w-[7px] h-[7px] rounded-full bg-accent" />}
             </button>
           );
         })}
 
-        <SectionLabel>Bots</SectionLabel>
+        <SectionLabel icon={Bot}>Bots</SectionLabel>
         <button onClick={() => select('taskis-bot')} className={itemCls(activeChannel === 'taskis-bot')}>
           <span className="w-[22px] h-[22px] rounded-md bg-accent-soft text-accent-text text-[11px] font-bold grid place-items-center flex-none">TB</span>
           <span className="flex-1 text-sm font-medium">Taskis Bot</span>
           {unread['taskis-bot'] && <span className="bg-accent text-on-accent text-[11px] font-semibold px-1.5 py-px rounded-full">●</span>}
         </button>
 
-        <SectionLabel>Operatives</SectionLabel>
+        <SectionLabel icon={Users}>Operatives</SectionLabel>
         {operatives.map((op) => {
           const channelId = getDmChannel(op.id);
           const active = activeChannel === channelId;
@@ -197,10 +206,10 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
           </button>
           <button onClick={() => setShowProfile(true)} className="flex-1 min-w-0 text-left">
             <div className="text-[13.5px] font-semibold text-t1 truncate">{displayOf(user)}</div>
-            <div className="flex items-center gap-1.5 text-[11.5px] text-t3">
-              <span className="w-[7px] h-[7px] rounded-full" style={{ background: 'var(--online)' }} />
+            <span className="tk-chip mt-0.5" style={{ background: 'color-mix(in srgb, var(--online) 16%, transparent)', color: 'var(--online)' }}>
+              <span className="w-[6px] h-[6px] rounded-full" style={{ background: 'var(--online)' }} />
               Online
-            </div>
+            </span>
           </button>
           <SettingsMenu />
           <ThemeToggle />

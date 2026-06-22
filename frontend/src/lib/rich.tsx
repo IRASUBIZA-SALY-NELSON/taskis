@@ -92,6 +92,26 @@ function inline(text: string, opts: Opts, keyBase: string) {
   });
 }
 
+/**
+ * Strip markdown markers to readable plain text — for compact previews (reply
+ * bars, pinned list, thread roots, search) where we want the *words* without
+ * the `*_~`` symbols cluttering them.
+ */
+export function plainText(text: string | null | undefined): string {
+  if (!text) return '';
+  return text
+    .replace(/```[\w.+-]*\n?([\s\S]*?)```/g, '$1') // fenced code → contents
+    .replace(/\*\*([^*\n]+)\*\*/g, '$1') // bold
+    .replace(/~~([^~\n]+)~~/g, '$1') // strike
+    .replace(/\|\|([^|\n]+)\|\|/g, '$1') // spoiler
+    .replace(/\*([^*\n]+)\*/g, '$1') // italic *
+    .replace(/(^|[\s(])_([^_\n]+)_/g, '$1$2') // italic _ (word-boundary only)
+    .replace(/`([^`\n]+)`/g, '$1') // inline code
+    .replace(/\[([^\]\n]+)\]\([^)\s]+\)/g, '$1') // [label](url) → label
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 /** Lightweight markdown: fenced code (lang header, copy, highlight), inline code,
     bold, italic, ~~strike~~, ||spoiler||, [links](url), bare links, @mentions, :custom_emoji:. */
 export function renderRich(text: string, opts: Opts = {}) {
