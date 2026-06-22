@@ -22,10 +22,13 @@ public class Message {
     @Column(length = 2048)
     private String content;
 
+    // Holds one URL, or a JSON array of URLs when several files are sent together.
     @Convert(converter = com.taskis.backend.security.StringCryptoConverter.class)
-@Column(length = 1024)
+    @Column(length = 8192)
     private String attachmentUrl;
 
+    // One MIME type, or a JSON array matching attachmentUrl.
+    @Column(length = 1024)
     private String attachmentType;
 
     private String channel;

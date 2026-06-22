@@ -23,7 +23,9 @@ public class FileController {
     private static final java.util.Set<String> INLINE_OK = java.util.Set.of(
             "image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp", "image/avif", "image/bmp",
             "audio/webm", "audio/ogg", "audio/mpeg", "audio/mp3", "audio/mp4", "audio/wav", "audio/x-m4a", "audio/aac",
-            "video/mp4", "video/webm", "video/ogg");
+            "video/mp4", "video/webm", "video/ogg",
+            // PDFs are safe to render inline for in-app preview (the CSP below sandboxes them).
+            "application/pdf");
 
     private ResponseEntity<?> serve(String id, String name, boolean download) {
         try {
