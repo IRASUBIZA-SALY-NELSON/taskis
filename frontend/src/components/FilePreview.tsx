@@ -85,7 +85,7 @@ export default function FilePreview({ att, onClose }: { att: PreviewAtt | null; 
             {kind === 'audio' && (
               <div className="w-full max-w-md px-6"><audio src={att.url} controls autoPlay className="w-full" /></div>
             )}
-            {kind === 'pdf' && <iframe src={att.url} title={att.name} className="w-full h-full bg-white" />}
+            {kind === 'pdf' && <iframe src={att.url} title={att.name} sandbox="" referrerPolicy="no-referrer" className="w-full h-full bg-white" />}
             {kind === 'text' && (
               <div className="w-full h-full overflow-auto scroll">
                 {textErr ? (
