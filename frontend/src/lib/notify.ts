@@ -27,9 +27,30 @@ export async function requestNotificationPermission(): Promise<boolean> {
 
 interface PushOpts { body?: string; url?: string; tag?: string }
 
+interface Dnd { on: boolean; from: number | null; to: number | null }
+export function getDnd(): Dnd {
+  if (typeof window === 'undefined') return { on: false, from: null, to: null };
+  try { return { on: false, from: null, to: null, ...JSON.parse(localStorage.getItem('dnd') || '{}') }; }
+  catch { return { on: false, from: null, to: null }; }
+}
+export function setDnd(d: Partial<Dnd>) {
+  try { localStorage.setItem('dnd', JSON.stringify({ ...getDnd(), ...d })); } catch { /* noop */ }
+}
+/** True when Do-Not-Disturb is on, or the current time is inside quiet hours. */
+export function isDnd(): boolean {
+  const d = getDnd();
+  if (d.on) return true;
+  if (d.from != null && d.to != null) {
+    const now = new Date();
+    const m = now.getHours() * 60 + now.getMinutes();
+    return d.from <= d.to ? (m >= d.from && m < d.to) : (m >= d.from || m < d.to);
+  }
+  return false;
+}
+
 /** Show a notification — via the service worker (works for backgrounded tabs) when possible. */
 export async function showNotification(title: string, opts: PushOpts = {}) {
-  if (!notificationsEnabled()) return;
+  if (!notificationsEnabled() || isDnd()) return;
   const options: NotificationOptions = {
     body: (opts.body || '').slice(0, 180),
     icon: '/icon.svg',
@@ -79,7 +100,7 @@ export function playReaction(emoji: string) {
 }
 
 /** Incoming-message / mention cue. */
-export function playPing() { blip(660, 0.06, 0.25); }
+export function playPing() { if (isDnd()) return; blip(660, 0.06, 0.25); }
 /** Subtle outgoing "sent" tick (only if sound is enabled). */
 export function playTick() { if (getNotifyPrefs().sound) blip(880, 0.025, 0.09); }
 

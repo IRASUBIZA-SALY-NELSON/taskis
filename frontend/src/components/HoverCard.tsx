@@ -50,7 +50,8 @@ export default function HoverCard({ user, children, className }: { user: any; ch
               <div className="text-[12.5px] text-t3 truncate">@{user?.username}</div>
             </div>
           </div>
-          {user?.bio && <p className="text-[13px] text-t2 leading-relaxed mt-3">{user.bio}</p>}
+          {user?.customStatus && <div className="text-[13px] text-t2 mt-2.5">{user.customStatus}</div>}
+          {user?.bio && <p className="text-[13px] text-t2 leading-relaxed mt-2">{user.bio}</p>}
           <div className="flex items-center gap-1.5 mt-3 text-[12px] text-t2">
             <span className="w-[7px] h-[7px] rounded-full" style={{ background: p.c }} />{p.label}
           </div>

@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Heart, MessageCircle, Image as ImageIcon, Trash2, Send, X, Smile, Clock, ArrowUp, Sparkles, Menu, ArrowBigUp, ArrowBigDown, Flag } from 'lucide-react';
+import { Heart, MessageCircle, Image as ImageIcon, Trash2, Send, X, Smile, Clock, ArrowUp, Sparkles, Menu, ArrowBigUp, ArrowBigDown, Flag, Flame, Trophy, TrendingUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { initials, toneFor, displayOf, defaultAvatarUrl } from './Sidebar';
 import { subscribe } from '@/lib/ws';
@@ -11,6 +11,8 @@ import { useToast } from './Toast';
 import { renderRich } from '@/lib/rich';
 import LinkPreview, { firstUrl } from './LinkPreview';
 import { useCustomEmojis } from '@/lib/customEmoji';
+import { recordVisit } from '@/lib/streak';
+import { markFeature } from '@/lib/features';
 
 const PAGE = 10;
 const api = (p: string) => `http://${window.location.hostname}:8080${p}`;
@@ -249,6 +251,55 @@ function PostCard({ post, user, now, onChange, onDelete, onReport, onZoom }: { p
   );
 }
 
+function RecapStat({ icon: Ic, label, value }: { icon: any; label: string; value: number | string }) {
+  return (
+    <div className="rounded-xl bg-surface-2 border border-border p-2.5 text-center">
+      <Ic className="w-[15px] h-[15px] mx-auto text-t3 mb-1" />
+      <div className="text-[17px] font-semibold text-t1 leading-none">{value}</div>
+      <div className="text-[11px] text-t3 mt-1">{label}</div>
+    </div>
+  );
+}
+
+function RecapCard({ posts, streak }: { posts: any[]; streak: number }) {
+  const now = Date.now();
+  const DAY = 86400000;
+  const todayStr = new Date().toDateString();
+  const todayCount = posts.filter((p) => new Date(p.createdAt).toDateString() === todayStr).length;
+  const week = posts.filter((p) => now - new Date(p.createdAt).getTime() < 7 * DAY);
+  const top = week.filter((p) => (p.likeCount || 0) > 0).sort((a, b) => (b.likeCount || 0) - (a.likeCount || 0))[0];
+  const h = new Date().getHours();
+  const greeting = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+  return (
+    <div className="card p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <div className="text-[15px] font-semibold text-t1">{greeting} 👋</div>
+          <div className="text-[12.5px] text-t2">Your daily recap</div>
+        </div>
+        <span className="tk-chip" style={{ background: 'color-mix(in srgb, #e8833a 16%, transparent)', color: '#e8833a' }} title="Daily visit streak">
+          <Flame className="w-[13px] h-[13px]" />{streak} day{streak === 1 ? '' : 's'}
+        </span>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <RecapStat icon={TrendingUp} label="Today" value={todayCount} />
+        <RecapStat icon={Sparkles} label="This week" value={week.length} />
+        <RecapStat icon={Flame} label="Streak" value={streak} />
+      </div>
+      {top && (
+        <div className="mt-3 flex items-center gap-2.5 p-2.5 rounded-xl bg-surface-2 border border-border">
+          <span className="w-8 h-8 rounded-lg grid place-items-center flex-none" style={{ background: 'color-mix(in srgb, var(--away) 18%, transparent)', color: 'var(--away)' }}><Trophy className="w-[16px] h-[16px]" /></span>
+          <div className="flex-1 min-w-0">
+            <div className="text-[10.5px] font-semibold uppercase tracking-wider text-t3">Most loved this week</div>
+            <div className="text-[13px] text-t1 truncate">{(top.caption || 'A photo')} · <span className="text-t2">{displayOf(top.author)}</span></div>
+          </div>
+          <span className="flex items-center gap-1 text-[13px] font-medium flex-none" style={{ color: 'var(--accent-text)' }}><ArrowBigUp className="w-[16px] h-[16px]" fill="currentColor" />{top.likeCount}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SkeletonCard() {
   return (
     <div className="card overflow-hidden">
@@ -283,6 +334,8 @@ export default function PostsFeed({ user, onToggleSidebar }: { user: any; onTogg
   const [zoom, setZoom] = useState<string | null>(null);
   const [now, setNow] = useState(() => 0);
   const [newPosts, setNewPosts] = useState(0);
+  const [streak, setStreak] = useState(0);
+  useEffect(() => { setStreak(recordVisit()); markFeature('recap'); }, []);
   const fileRef = useRef<HTMLInputElement>(null);
   const capRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -439,6 +492,7 @@ export default function PostsFeed({ user, onToggleSidebar }: { user: any; onTogg
         </AnimatePresence>
 
         <div className="max-w-[560px] mx-auto px-4 py-6 flex flex-col gap-5">
+          {!loading && <RecapCard posts={posts} streak={streak} />}
           {/* composer */}
           <div className="card p-4" onDragOver={(e) => e.preventDefault()} onDrop={onComposerDrop}>
             <div className="flex items-start gap-3">

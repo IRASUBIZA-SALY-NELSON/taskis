@@ -19,9 +19,13 @@ export const FEATURES: FeatureItem[] = [
   { key: 'superreact', title: 'Super-reactions', desc: 'React 🎉 or 🔥 for a sound + confetti burst.' },
   { key: 'accent', title: 'Pick your accent', desc: 'Recolor the whole app from Settings → Accent.' },
   { key: 'markdown', title: 'Rich formatting', desc: 'Use > quotes, - lists, and | tables | in messages.' },
+  { key: 'recap', title: 'Daily recap & streaks', desc: 'Open the Feed for your streak and the week’s top post.' },
+  { key: 'status', title: 'Custom status', desc: 'Set “🌴 On leave” from your profile.' },
+  { key: 'dnd', title: 'Do Not Disturb', desc: 'Silence pings — with optional quiet hours — in Settings.' },
+  { key: 'favorites', title: 'Favorite channels', desc: 'Star a channel to pin it to the top.' },
 ];
 
-const KEY = 'taskis-features-v2';
+const KEY = 'taskis-features-v3';
 const EVT = 'taskis:feature';
 
 interface State { seen?: boolean; dismissed?: boolean; done?: string[] }

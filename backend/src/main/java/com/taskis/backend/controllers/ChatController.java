@@ -236,6 +236,10 @@ public class ChatController {
             String b = body.get("bio");
             user.setBio(b != null ? b.trim() : null);
         }
+        if (body.containsKey("customStatus")) {
+            String s = body.get("customStatus");
+            user.setCustomStatus(s != null && !s.trim().isEmpty() ? s.trim() : null);
+        }
         userRepository.save(user);
         return ResponseEntity.ok(user);
     }

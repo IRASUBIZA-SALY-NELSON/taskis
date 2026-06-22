@@ -46,6 +46,8 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [showShare, setShowShare] = useState(false);
+  const [topic, setTopic] = useState('');
+  const [editingTopic, setEditingTopic] = useState(false);
   const [confidUnlocked, setConfidUnlocked] = useState(true);
   const [passInput, setPassInput] = useState('');
   const [passErr, setPassErr] = useState(false);
@@ -142,6 +144,18 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     } else {
       setPassErr(true);
     }
+  };
+
+  // Channel topic (kept locally per channel for now).
+  useEffect(() => {
+    setEditingTopic(false);
+    try { setTopic(localStorage.getItem(`taskis-topic-${channel}`) || ''); } catch { setTopic(''); }
+  }, [channel]);
+  const saveTopic = (v: string) => {
+    const t = v.trim();
+    setTopic(t);
+    setEditingTopic(false);
+    try { if (t) localStorage.setItem(`taskis-topic-${channel}`, t); else localStorage.removeItem(`taskis-topic-${channel}`); } catch { /* noop */ }
   };
 
   // Konami code → it rains confetti. Pure silliness.
@@ -1054,7 +1068,25 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
         )}
         <div className="flex-1 min-w-0">
           <div className="text-[15.5px] font-semibold text-t1 leading-tight truncate">{headerTitle}</div>
-          <div className="flex items-center gap-1.5 text-xs text-t2 mt-px"><Lock className="w-[11px] h-[11px]" />{headerSub}</div>
+          {isChannel ? (
+            editingTopic ? (
+              <input
+                autoFocus
+                defaultValue={topic}
+                onBlur={(e) => saveTopic(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') saveTopic((e.target as HTMLInputElement).value); if (e.key === 'Escape') setEditingTopic(false); }}
+                placeholder="Add a topic…"
+                className="bg-transparent border-0 outline-none text-xs text-t2 w-full mt-px"
+              />
+            ) : (
+              <button onClick={() => setEditingTopic(true)} className="group flex items-center gap-1.5 text-xs text-t2 hover:text-t1 transition-colors mt-px max-w-full" title="Set channel topic">
+                <span className="truncate">{topic || <span className="text-t3">Add a topic…</span>}</span>
+                <Pencil className="w-[10px] h-[10px] flex-none opacity-0 group-hover:opacity-100 transition-opacity" />
+              </button>
+            )
+          ) : (
+            <div className="flex items-center gap-1.5 text-xs text-t2 mt-px"><Lock className="w-[11px] h-[11px]" />{headerSub}</div>
+          )}
         </div>
 
         <div className="flex items-center gap-1.5 flex-none">

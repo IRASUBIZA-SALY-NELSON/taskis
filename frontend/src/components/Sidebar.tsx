@@ -1,12 +1,13 @@
 'use client';
 
 import React from 'react';
-import { Hash, Lock, Shield, LogOut, Newspaper, Search, Radar, Megaphone, Bot, Users } from 'lucide-react';
+import { Hash, Lock, Shield, LogOut, Newspaper, Search, Radar, Megaphone, Bot, Users, Star } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import ThemeToggle from './ThemeToggle';
 import SettingsMenu from './SettingsMenu';
 import ProfileModal from './ProfileModal';
 import { disconnectWs } from '@/lib/ws';
+import { markFeature } from '@/lib/features';
 
 export function displayOf(u: any) {
   return (u?.displayName && u.displayName.trim()) || u?.username || '?';
@@ -62,6 +63,20 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
   const [operatives, setOperatives] = React.useState<any[]>([]);
   const [unread, setUnread] = React.useState<Record<string, boolean>>({});
   const [showProfile, setShowProfile] = React.useState(false);
+  const [favs, setFavs] = React.useState<string[]>([]);
+
+  React.useEffect(() => {
+    try { setFavs(JSON.parse(localStorage.getItem('taskis-fav-channels') || '[]')); } catch { /* noop */ }
+  }, []);
+  const toggleFav = (c: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    markFeature('favorites');
+    setFavs((prev) => {
+      const next = prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c];
+      try { localStorage.setItem('taskis-fav-channels', JSON.stringify(next)); } catch { /* noop */ }
+      return next;
+    });
+  };
 
   const api = (p: string) => `http://${window.location.hostname}:8080${p}`;
 
@@ -138,6 +153,30 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
         : 'text-t2 border border-transparent hover:bg-hover hover:text-t1'
     }`;
 
+  const renderChannel = (c: string) => {
+    const active = activeChannel === c;
+    const locked = c === 'confidential';
+    const fav = favs.includes(c);
+    const Ic = channelIcon[c] || Hash;
+    return (
+      <div key={c} onClick={() => select(c)} className={`group ${itemCls(active)}`}>
+        <Ic className="w-[15px] h-[15px] flex-none" style={{ color: active ? 'var(--t1)' : 'var(--t3)' }} />
+        <span className="flex-1 text-sm font-medium">{c.charAt(0).toUpperCase() + c.slice(1)}</span>
+        {locked && <Lock className="w-[12px] h-[12px] text-t3" />}
+        {unread[c] && <span className="w-[7px] h-[7px] rounded-full bg-accent" />}
+        <span
+          role="button"
+          tabIndex={0}
+          aria-label={fav ? 'Unfavorite' : 'Favorite'}
+          onClick={(e) => toggleFav(c, e)}
+          className={`grid place-items-center w-5 h-5 rounded-md transition-opacity ${fav ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+        >
+          <Star className="w-[13px] h-[13px]" style={{ color: fav ? 'var(--away)' : 'var(--t3)', fill: fav ? 'var(--away)' : 'transparent' }} />
+        </span>
+      </div>
+    );
+  };
+
   return (
     <>
       {isOpen && <div onClick={() => setIsOpen(false)} className="fixed inset-0 bg-black/40 z-30 lg:hidden" aria-hidden />}
@@ -171,20 +210,15 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
           <span className="flex-1 text-sm font-medium">Feed</span>
         </button>
 
+        {favs.length > 0 && (
+          <>
+            <SectionLabel icon={Star}>Favorites</SectionLabel>
+            {channels.filter((c) => favs.includes(c)).map((c) => renderChannel(c))}
+          </>
+        )}
+
         <SectionLabel icon={Hash}>Channels</SectionLabel>
-        {channels.map((c) => {
-          const active = activeChannel === c;
-          const locked = c === 'confidential';
-          const Ic = channelIcon[c] || Hash;
-          return (
-            <button key={c} onClick={() => select(c)} className={itemCls(active)}>
-              <Ic className="w-[15px] h-[15px] flex-none" style={{ color: active ? 'var(--t1)' : 'var(--t3)' }} />
-              <span className="flex-1 text-sm font-medium">{c.charAt(0).toUpperCase() + c.slice(1)}</span>
-              {locked && <Lock className="w-[12px] h-[12px] text-t3" />}
-              {unread[c] && <span className="w-[7px] h-[7px] rounded-full bg-accent" />}
-            </button>
-          );
-        })}
+        {channels.filter((c) => !favs.includes(c)).map((c) => renderChannel(c))}
 
         <SectionLabel icon={Bot}>Bots</SectionLabel>
         <button onClick={() => select('taskis-bot')} className={itemCls(activeChannel === 'taskis-bot')}>
@@ -224,10 +258,14 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
           </button>
           <button onClick={() => setShowProfile(true)} className="flex-1 min-w-0 text-left">
             <div className="text-[13.5px] font-semibold text-t1 truncate">{displayOf(user)}</div>
-            <span className="tk-chip mt-0.5" style={{ background: 'color-mix(in srgb, var(--online) 16%, transparent)', color: 'var(--online)' }}>
-              <span className="w-[6px] h-[6px] rounded-full" style={{ background: 'var(--online)' }} />
-              Online
-            </span>
+            {user.customStatus ? (
+              <div className="text-[12px] text-t2 truncate">{user.customStatus}</div>
+            ) : (
+              <span className="tk-chip mt-0.5" style={{ background: 'color-mix(in srgb, var(--online) 16%, transparent)', color: 'var(--online)' }}>
+                <span className="w-[6px] h-[6px] rounded-full" style={{ background: 'var(--online)' }} />
+                Online
+              </span>
+            )}
           </button>
           <SettingsMenu />
           <ThemeToggle />
