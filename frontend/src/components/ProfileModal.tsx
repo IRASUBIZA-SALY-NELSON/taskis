@@ -3,7 +3,7 @@
 import React, { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Camera } from 'lucide-react';
-import { initials, toneFor } from './Sidebar';
+import { initials, toneFor, defaultAvatarUrl } from './Sidebar';
 import { useFocusTrap } from '@/lib/useFocusTrap';
 
 interface Props {
@@ -23,7 +23,7 @@ export default function ProfileModal({ user, onClose }: Props) {
   useFocusTrap(true, cardRef);
 
   const token = () => localStorage.getItem('token');
-  const currentAvatar = user.avatarUrl ? (user.avatarUrl.startsWith('http') ? user.avatarUrl : api(user.avatarUrl)) : null;
+  const currentAvatar = user.avatarUrl ? (user.avatarUrl.startsWith('http') ? user.avatarUrl : api(user.avatarUrl)) : defaultAvatarUrl(user.username);
 
   const pickAvatar = (f: File | null) => {
     if (avatarPreview) URL.revokeObjectURL(avatarPreview);

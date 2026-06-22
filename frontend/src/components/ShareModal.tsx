@@ -3,15 +3,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
-import { X, Link2, Users, Lock, Check, ShieldCheck, ChevronDown, UserPlus } from 'lucide-react';
-import { initials, toneFor, displayOf } from './Sidebar';
+import { X, Link2, Users, Lock, Check, ShieldCheck, ChevronDown, UserPlus, Share2 } from 'lucide-react';
+import { initials, toneFor, displayOf, avatarFor } from './Sidebar';
 import { useToast } from './Toast';
 import { copyToClipboard } from '@/lib/clipboard';
 
 type Access = 'Can view' | 'Can edit';
 
-const api = (p: string) => `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:8080${p}`;
-const avatarSrc = (u: any) => (u?.avatarUrl ? (u.avatarUrl.startsWith('http') ? u.avatarUrl : api(u.avatarUrl)) : null);
+const avatarSrc = (u: any) => avatarFor(u);
 
 function AccessSelect({ value, onChange, small }: { value: string; onChange: (v: Access) => void; small?: boolean }) {
   const [open, setOpen] = useState(false);
@@ -65,13 +64,29 @@ export default function ShareModal({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  const [canNativeShare, setCanNativeShare] = useState(false);
+  useEffect(() => { setCanNativeShare(typeof navigator !== 'undefined' && !!(navigator as any).share); }, []);
+
   const invite = (e: React.FormEvent) => {
     e.preventDefault();
     const v = email.trim();
     if (!v) return;
-    copyToClipboard(`${shareUrl}`);
-    toast(`Invite link for ${v} copied — share it to grant ${inviteAccess.toLowerCase()} access`, 'success');
+    const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+    const subject = encodeURIComponent(`You're invited to ${title} on Taskis`);
+    const body = encodeURIComponent(`You've been given ${inviteAccess.toLowerCase()} access to ${title} on Taskis.\n\nOpen it here: ${shareUrl}`);
+    if (isEmail) {
+      window.location.href = `mailto:${encodeURIComponent(v)}?subject=${subject}&body=${body}`;
+      toast(`Opening an invite email to ${v}`, 'success');
+    } else {
+      copyToClipboard(shareUrl);
+      toast(`Invite link copied — share it with ${v} for ${inviteAccess.toLowerCase()} access`, 'success');
+    }
     setEmail('');
+  };
+
+  const nativeShare = async () => {
+    try { await (navigator as any).share({ title: `${title} · Taskis`, text: `Join ${title} on Taskis`, url: shareUrl }); }
+    catch { /* user cancelled */ }
   };
 
   const copyLink = async () => {
@@ -172,6 +187,9 @@ export default function ShareModal({
           <div className="flex items-center gap-2 rounded-xl bg-surface-2 border border-border pl-3 pr-1.5 py-1.5">
             <Lock className="w-[13px] h-[13px] text-t3 flex-none" />
             <span className="flex-1 min-w-0 truncate text-[12.5px] text-t2">{shareUrl}</span>
+            {canNativeShare && (
+              <button onClick={nativeShare} className="btn-secondary px-3 py-2 text-[12.5px] flex-none" title="Share via…"><Share2 className="w-[14px] h-[14px]" />Share</button>
+            )}
             <button onClick={copyLink} className="btn-accent px-3 py-2 text-[12.5px] flex-none">
               {copied ? <Check className="w-[14px] h-[14px]" /> : <Link2 className="w-[14px] h-[14px]" />}{copied ? 'Copied' : 'Copy Link'}
             </button>

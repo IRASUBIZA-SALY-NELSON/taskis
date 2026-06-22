@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Heart, MessageCircle, Image as ImageIcon, Trash2, Send, X, Smile, Clock, ArrowUp, Sparkles, Menu, ArrowBigUp, ArrowBigDown, Flag } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { initials, toneFor, displayOf } from './Sidebar';
+import { initials, toneFor, displayOf, defaultAvatarUrl } from './Sidebar';
 import { subscribe } from '@/lib/ws';
 import EmojiGifPicker from './EmojiGifPicker';
 import { useToast } from './Toast';
@@ -51,7 +51,7 @@ function expiryLabel(expiresAt: string, now: number) {
 }
 
 function Avatar({ u, size = 36 }: { u: any; size?: number }) {
-  const src = mediaUrl(u?.avatarUrl);
+  const src = u?.avatarUrl ? mediaUrl(u.avatarUrl) : defaultAvatarUrl(u?.username || '?');
   return (
     <span className="relative rounded-full grid place-items-center flex-none text-white font-semibold overflow-hidden" style={{ width: size, height: size, fontSize: size * 0.36, background: src ? 'transparent' : toneFor(u?.username || '?') }}>
       {src ? <img src={src} alt="" className="absolute inset-0 w-full h-full object-cover" /> : initials(u?.username || '?')}

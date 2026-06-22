@@ -2,7 +2,7 @@
 
 import React, { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { initials, toneFor, displayOf } from './Sidebar';
+import { initials, toneFor, displayOf, defaultAvatarUrl } from './Sidebar';
 
 const api = (p: string) => `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:8080${p}`;
 const mediaUrl = (u?: string) => (!u ? '' : u.startsWith('http') ? u : api(u));
@@ -28,7 +28,7 @@ export default function HoverCard({ user, children, className }: { user: any; ch
   };
   const hide = () => { if (timer.current) clearTimeout(timer.current); setPos(null); };
 
-  const src = mediaUrl(user?.avatarUrl);
+  const src = user?.avatarUrl ? mediaUrl(user.avatarUrl) : defaultAvatarUrl(user?.username || '?');
   const p = presence(user?.status);
 
   return (

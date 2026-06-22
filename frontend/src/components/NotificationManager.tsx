@@ -23,7 +23,9 @@ export default function NotificationManager({ user }: { user: any }) {
     requestNotificationPermission();
 
     const offs: Array<() => void> = [];
-    const mentionsMe = (t: string) => !!t && new RegExp(`(^|\\s)@${user.username}\\b`, 'i').test(t);
+    const mentionsMe = (t: string) =>
+      !!t && (new RegExp(`(^|\\s)@${user.username}\\b`, 'i').test(t)
+        || /(^|\s)@(channel|here|everyone)\b/i.test(t));
 
     const handle = (tag: string) => (msg: any) => {
       if (!msg || msg.id == null || seen.current.has(msg.id)) return;

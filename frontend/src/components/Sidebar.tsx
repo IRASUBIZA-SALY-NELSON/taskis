@@ -32,6 +32,24 @@ export function toneFor(name: string) {
   return AVATAR_TONES[sum % AVATAR_TONES.length];
 }
 
+/** A status ring drawn around an avatar — gold for admins. Returns a box-shadow. */
+export function ringFor(u: any): string | undefined {
+  if (u?.role === 'ADMIN') return '0 0 0 2px var(--surface-1), 0 0 0 3.5px #d9930a';
+  return undefined;
+}
+
+/** A generated default profile picture for anyone without an uploaded avatar. */
+export function defaultAvatarUrl(name: string) {
+  return `https://api.dicebear.com/7.x/thumbs/svg?radius=50&backgroundType=gradientLinear&seed=${encodeURIComponent(name || 'taskis')}`;
+}
+
+/** Resolve a user's avatar URL, falling back to a generated default profile. */
+export function avatarFor(u: any) {
+  const raw = u?.avatarUrl;
+  if (raw) return raw.startsWith('http') ? raw : `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:8080${raw}`;
+  return defaultAvatarUrl(u?.username || '?');
+}
+
 function presenceColor(status: string) {
   if (status === 'ACTIVE') return 'var(--online)';
   if (status === 'AWAY') return 'var(--away)';
@@ -96,7 +114,7 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
   };
 
   const avatarSrc = (u: any) =>
-    u.avatarUrl ? (u.avatarUrl.startsWith('http') ? u.avatarUrl : api(u.avatarUrl)) : null;
+    u.avatarUrl ? (u.avatarUrl.startsWith('http') ? u.avatarUrl : api(u.avatarUrl)) : defaultAvatarUrl(u.username);
 
   const select = (c: string) => {
     setActiveChannel(c);
@@ -182,7 +200,7 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
           const src = avatarSrc(op);
           return (
             <button key={op.id} onClick={() => select(channelId)} className={itemCls(active)}>
-              <span className="relative overflow-hidden w-[25px] h-[25px] rounded-full grid place-items-center flex-none text-[11px] font-semibold text-white" style={{ background: src ? 'transparent' : toneFor(op.username) }}>
+              <span className="relative overflow-hidden w-[25px] h-[25px] rounded-full grid place-items-center flex-none text-[11px] font-semibold text-white" style={{ background: src ? 'transparent' : toneFor(op.username), boxShadow: ringFor(op) }}>
                 {src ? <img src={src} alt="" className="absolute inset-0 w-full h-full object-cover" /> : initials(op.username)}
                 <span className="absolute -right-px -bottom-px w-[9px] h-[9px] rounded-full z-10" style={{ background: presenceColor(op.status), border: '2px solid var(--surface-1)' }} />
               </span>

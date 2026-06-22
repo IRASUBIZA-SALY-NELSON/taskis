@@ -5,6 +5,8 @@ import { Settings, Check } from 'lucide-react';
 import { FONT_OPTIONS, getFontId, applyFont } from '@/lib/prefs';
 import { getNotifyPrefs, setNotifyPrefs, requestNotificationPermission, notificationsEnabled } from '@/lib/notify';
 import { getThemeMode, applyThemeMode, type ThemeMode } from '@/lib/theme';
+import { ACCENTS, getAccent, applyAccent } from '@/lib/accent';
+import { markFeature } from '@/lib/features';
 
 function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
   return (
@@ -25,6 +27,7 @@ export default function SettingsMenu() {
   const [prefs, setPrefs] = useState({ sound: true, desktop: true });
   const [granted, setGranted] = useState(true);
   const [theme, setTheme] = useState<ThemeMode>('light');
+  const [accent, setAccent] = useState('blue');
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -32,6 +35,7 @@ export default function SettingsMenu() {
     setPrefs(getNotifyPrefs());
     setGranted(notificationsEnabled());
     setTheme(getThemeMode());
+    setAccent(getAccent());
   }, [open]);
 
   useEffect(() => {
@@ -69,6 +73,24 @@ export default function SettingsMenu() {
                   style={theme === m ? { background: 'var(--surface-1)', color: 'var(--t1)', boxShadow: 'var(--shadow-sm)' } : { color: 'var(--t3)' }}
                 >
                   {m}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="px-3 pt-2 pb-1">
+            <div className="eyebrow pb-2">Accent</div>
+            <div className="flex items-center gap-2">
+              {ACCENTS.map((a) => (
+                <button
+                  key={a.id}
+                  onClick={() => { applyAccent(a.id); setAccent(a.id); markFeature('accent'); }}
+                  title={a.label}
+                  aria-label={a.label}
+                  className="w-6 h-6 rounded-full grid place-items-center transition-transform hover:scale-110"
+                  style={{ background: a.hex, boxShadow: accent === a.id ? '0 0 0 2px var(--surface-1), 0 0 0 4px var(--t2)' : 'var(--edge-hi)' }}
+                >
+                  {accent === a.id && <Check className="w-[12px] h-[12px] text-white" />}
                 </button>
               ))}
             </div>
