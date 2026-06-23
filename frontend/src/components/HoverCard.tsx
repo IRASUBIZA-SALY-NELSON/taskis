@@ -2,7 +2,7 @@
 
 import React, { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { initials, toneFor, displayOf, defaultAvatarUrl } from './Sidebar';
+import { initials, toneFor, displayOf, defaultAvatarUrl, ringFor } from './Sidebar';
 
 const api = (p: string) => `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:8080${p}`;
 const mediaUrl = (u?: string) => (!u ? '' : u.startsWith('http') ? u : api(u));
@@ -42,7 +42,7 @@ export default function HoverCard({ user, children, className }: { user: any; ch
           style={{ left: pos.x, top: pos.above ? undefined : pos.y + 8, bottom: pos.above ? window.innerHeight - pos.y + 8 : undefined, boxShadow: 'var(--shadow-lg), var(--edge-hi)' }}
         >
           <div className="flex items-center gap-3">
-            <span className="relative w-12 h-12 rounded-full grid place-items-center flex-none text-white font-semibold overflow-hidden" style={{ background: src ? 'transparent' : toneFor(user?.username || '?'), fontSize: 18 }}>
+            <span className="relative w-12 h-12 rounded-full grid place-items-center flex-none text-white font-semibold overflow-hidden" style={{ background: src ? 'transparent' : toneFor(user?.username || '?'), fontSize: 18, boxShadow: ringFor(user) }}>
               {src ? <img src={src} alt="" className="absolute inset-0 w-full h-full object-cover" /> : initials(user?.username || '?')}
             </span>
             <div className="min-w-0">

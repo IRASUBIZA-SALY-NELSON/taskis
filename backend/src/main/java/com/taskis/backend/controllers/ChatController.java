@@ -240,6 +240,11 @@ public class ChatController {
             String s = body.get("customStatus");
             user.setCustomStatus(s != null && !s.trim().isEmpty() ? s.trim() : null);
         }
+        if (body.containsKey("ringColor")) {
+            String c = body.get("ringColor");
+            // accept #rgb/#rrggbb (or clear); ignore anything else to stay safe in inline styles
+            user.setRingColor(c != null && c.matches("#[0-9a-fA-F]{3,8}") ? c : null);
+        }
         userRepository.save(user);
         return ResponseEntity.ok(user);
     }
@@ -289,16 +294,19 @@ public class ChatController {
     @GetMapping("/users")
     public ResponseEntity<List<User>> getUsers() {
         List<User> users = userRepository.findAll();
-        // Calculate true active status
+        // Derive true presence from heartbeat age (clients beat every ~5s):
+        //   no/stale beat → OFFLINE, idle → AWAY, recent → as reported (ACTIVE/AWAY).
         long now = System.currentTimeMillis();
         for (User user : users) {
-            if (user.getLastHeartbeat() != null && "ACTIVE".equals(user.getStatus())) {
-                if (now - user.getLastHeartbeat().getTime() > 10000) {
-                    user.setStatus("AWAY"); // Or offline
-                }
-            } else if (user.getLastHeartbeat() == null) {
+            java.util.Date hb = user.getLastHeartbeat();
+            if (hb == null) { user.setStatus("OFFLINE"); continue; }
+            long age = now - hb.getTime();
+            if (age > 30000) {
                 user.setStatus("OFFLINE");
+            } else if (age > 12000 && "ACTIVE".equals(user.getStatus())) {
+                user.setStatus("AWAY");
             }
+            // recent beat: keep the reported status (ACTIVE when focused, AWAY when not)
         }
         return ResponseEntity.ok(users);
     }

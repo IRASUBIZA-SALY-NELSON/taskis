@@ -1,13 +1,13 @@
 'use client';
 
 import React from 'react';
-import { Hash, Lock, Shield, LogOut, Newspaper, Search, Radar, Megaphone, Bot, Users, Star } from 'lucide-react';
+import { Hash, Lock, Shield, LogOut, Newspaper, Search, Radar, Megaphone, Bot, Users, Star, StickyNote, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import ThemeToggle from './ThemeToggle';
 import SettingsMenu from './SettingsMenu';
 import ProfileModal from './ProfileModal';
 import { disconnectWs } from '@/lib/ws';
-import { markFeature } from '@/lib/features';
+import { markFeature, FEATURES, getDone, onFeatureChange } from '@/lib/features';
 
 export function displayOf(u: any) {
   return (u?.displayName && u.displayName.trim()) || u?.username || '?';
@@ -33,8 +33,10 @@ export function toneFor(name: string) {
   return AVATAR_TONES[sum % AVATAR_TONES.length];
 }
 
-/** A status ring drawn around an avatar — gold for admins. Returns a box-shadow. */
+/** A status ring drawn around an avatar — a user's chosen color, or gold for admins. */
 export function ringFor(u: any): string | undefined {
+  const c = typeof u?.ringColor === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(u.ringColor) ? u.ringColor : null;
+  if (c) return `0 0 0 2px var(--surface-1), 0 0 0 3.5px ${c}`;
   if (u?.role === 'ADMIN') return '0 0 0 2px var(--surface-1), 0 0 0 3.5px #d9930a';
   return undefined;
 }
@@ -65,9 +67,16 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
   const [showProfile, setShowProfile] = React.useState(false);
   const [favs, setFavs] = React.useState<string[]>([]);
 
+  const [newCount, setNewCount] = React.useState(0);
+
   React.useEffect(() => {
     try { setFavs(JSON.parse(localStorage.getItem('taskis-fav-channels') || '[]')); } catch { /* noop */ }
+    const recompute = () => setNewCount(FEATURES.filter((f) => !getDone().has(f.key)).length);
+    recompute();
+    return onFeatureChange(recompute);
   }, []);
+
+  const selfNotes = `dm_${user.id}_${user.id}`;
   const toggleFav = (c: string, e: React.MouseEvent) => {
     e.stopPropagation();
     markFeature('favorites');
@@ -209,6 +218,16 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
           <Newspaper className="w-[15px] h-[15px] flex-none" style={{ color: activeChannel === '__posts__' ? 'var(--t1)' : 'var(--t3)' }} />
           <span className="flex-1 text-sm font-medium">Feed</span>
         </button>
+        <button onClick={() => select(selfNotes)} className={itemCls(activeChannel === selfNotes)}>
+          <StickyNote className="w-[15px] h-[15px] flex-none" style={{ color: activeChannel === selfNotes ? 'var(--t1)' : 'var(--t3)' }} />
+          <span className="flex-1 text-sm font-medium">Notes</span>
+          <span className="text-[10.5px] text-t3">you</span>
+        </button>
+        <button onClick={() => window.dispatchEvent(new Event('open-whats-new'))} className={itemCls(false)}>
+          <Sparkles className="w-[15px] h-[15px] flex-none text-t3" />
+          <span className="flex-1 text-sm font-medium">What’s new</span>
+          {newCount > 0 && <span className="min-w-[18px] h-[18px] px-1 grid place-items-center rounded-full bg-accent text-on-accent text-[10.5px] font-bold">{newCount}</span>}
+        </button>
 
         {favs.length > 0 && (
           <>
@@ -252,7 +271,7 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
             onClick={() => setShowProfile(true)}
             title="Edit profile"
             className="relative overflow-hidden w-8 h-8 rounded-full grid place-items-center flex-none text-xs font-semibold text-white hover:opacity-80 transition-opacity"
-            style={{ background: avatarSrc(user) ? 'transparent' : toneFor(user.username) }}
+            style={{ background: avatarSrc(user) ? 'transparent' : toneFor(user.username), boxShadow: ringFor(user) }}
           >
             {avatarSrc(user) ? <img src={avatarSrc(user)!} alt="" className="absolute inset-0 w-full h-full object-cover" /> : initials(user.username)}
           </button>

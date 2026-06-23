@@ -1,14 +1,16 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, CircleCheck, Circle, X, ChevronDown, PartyPopper } from 'lucide-react';
+import { Sparkles, CircleCheck, Circle, X, PartyPopper } from 'lucide-react';
 import { FEATURES, getDone, hasSeenTour, setSeen, onFeatureChange, markFeature } from '@/lib/features';
 import { confetti } from '@/lib/fun';
 
 /**
- * A cookie-banner-style "What's new" announcer that slides in on first visit,
- * with a Notion-style exploration checklist. A floating button reopens it later.
+ * "What's new" announcer + exploration checklist. Opens automatically on first
+ * visit and on demand via the `open-whats-new` window event (fired from the
+ * sidebar). Rendered as a centered modal so it never covers the composer.
  */
 export default function FeaturesPanel() {
   const [open, setOpen] = useState(false);
@@ -24,32 +26,43 @@ export default function FeaturesPanel() {
   }, []);
 
   useEffect(() => onFeatureChange(() => setDone(getDone())), []);
+  useEffect(() => {
+    const openIt = () => setOpen(true);
+    window.addEventListener('open-whats-new', openIt);
+    return () => window.removeEventListener('open-whats-new', openIt);
+  }, []);
 
   const total = FEATURES.length;
   const completed = FEATURES.filter((f) => done.has(f.key)).length;
   const pct = Math.round((completed / total) * 100);
   const allDone = completed === total;
 
-  // a little celebration the moment the whole list is finished
   useEffect(() => {
     if (allDone && open && !celebrated) { confetti(120); setCelebrated(true); }
     if (!allDone) setCelebrated(false);
   }, [allDone, open, celebrated]);
 
-  return (
-    <div className="fixed bottom-4 right-4 z-[300] flex flex-col items-end gap-3 print:hidden">
-      <AnimatePresence>
-        {open && (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          onClick={() => setOpen(false)}
+          className="fixed inset-0 z-[460] flex items-end sm:items-center justify-center p-4 sm:p-6"
+          style={{ background: 'rgba(7,7,9,0.5)', backdropFilter: 'blur(3px)' }}
+        >
           <motion.div
             initial={{ opacity: 0, y: 24, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 24, scale: 0.98 }}
             transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-            className="card w-[340px] max-w-[calc(100vw-2rem)] overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+            className="card w-[380px] max-w-full overflow-hidden"
             style={{ boxShadow: 'var(--shadow-lg)' }}
           >
-            {/* header */}
-            <div className="flex items-start gap-3 px-4 pt-4 pb-3">
+            <div className="flex items-start gap-3 px-5 pt-5 pb-3">
               <span className="w-9 h-9 rounded-xl grid place-items-center flex-none text-on-accent" style={{ background: 'var(--accent)' }}>
                 <Sparkles className="w-[17px] h-[17px]" />
               </span>
@@ -57,13 +70,12 @@ export default function FeaturesPanel() {
                 <div className="text-[15px] font-semibold text-t1 tracking-tight">What’s new in Taskis</div>
                 <div className="text-[12.5px] text-t2 mt-0.5">Explore the latest features</div>
               </div>
-              <button onClick={() => setOpen(false)} className="icon-btn w-7 h-7 flex-none border-0" aria-label="Collapse">
-                <ChevronDown className="w-[16px] h-[16px]" />
+              <button onClick={() => setOpen(false)} className="icon-btn w-7 h-7 flex-none border-0" aria-label="Close">
+                <X className="w-[16px] h-[16px]" />
               </button>
             </div>
 
-            {/* checklist */}
-            <div className="px-2 pb-1 max-h-[46vh] overflow-y-auto scroll">
+            <div className="px-3 pb-1 max-h-[50vh] overflow-y-auto scroll">
               {FEATURES.map((f) => {
                 const isDone = done.has(f.key);
                 return (
@@ -85,8 +97,7 @@ export default function FeaturesPanel() {
               })}
             </div>
 
-            {/* progress footer */}
-            <div className="px-4 py-3 border-t border-border flex items-center gap-3">
+            <div className="px-5 py-3 border-t border-border flex items-center gap-3">
               {allDone ? (
                 <span className="flex items-center gap-1.5 text-[12.5px] font-semibold" style={{ color: 'var(--accent-text)' }}>
                   <PartyPopper className="w-[14px] h-[14px]" />All explored — nice!
@@ -99,23 +110,9 @@ export default function FeaturesPanel() {
               </span>
             </div>
           </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* reopen button — always available */}
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 pl-3 pr-3.5 py-2 rounded-full btn-accent text-[13px] shadow-[var(--shadow-md)]"
-        title="What's new"
-      >
-        <Sparkles className="w-[15px] h-[15px]" />
-        New features
-        {!open && completed < total && (
-          <span className="grid place-items-center min-w-[18px] h-[18px] px-1 rounded-full text-[10.5px] font-bold" style={{ background: 'var(--on-btn)', color: 'var(--btn-primary)' }}>
-            {total - completed}
-          </span>
-        )}
-      </button>
-    </div>
+        </motion.div>
+      )}
+    </AnimatePresence>,
+    document.body,
   );
 }
