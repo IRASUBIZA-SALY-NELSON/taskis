@@ -761,6 +761,8 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     toast(`Deleted ${ids.length} message${ids.length > 1 ? 's' : ''}`, 'success');
   };
 
+  const openProfile = (uname?: string) => { if (uname && uname !== 'Taskis Bot') window.dispatchEvent(new CustomEvent('open-profile', { detail: uname })); };
+
   const renderContent = (text: string) => renderRich(text, { members, me: user.username, custom: customMap });
 
   const detectMention = (val: string, pos: number) => {
@@ -1076,13 +1078,17 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
         {isChannel && <span className="text-[22px] font-medium text-t3 leading-none">#</span>}
         {isBot && <span className="w-[30px] h-[30px] rounded-lg bg-accent-soft text-accent-text text-[13px] font-bold grid place-items-center flex-none">TB</span>}
         {isDm && (
-          <span className="relative w-[30px] h-[30px] rounded-full grid place-items-center flex-none text-xs font-semibold text-white overflow-hidden" style={{ background: dmPartner ? 'transparent' : toneFor(dmPartner?.username || channel) }}>
+          <button onClick={() => openProfile(dmPartner?.username)} disabled={!dmPartner} className="relative w-[30px] h-[30px] rounded-full grid place-items-center flex-none text-xs font-semibold text-white overflow-hidden hover:opacity-85 transition-opacity" style={{ background: dmPartner ? 'transparent' : toneFor(dmPartner?.username || channel) }}>
             {dmPartner ? <img src={avatarFor(dmPartner)} alt="" className="absolute inset-0 w-full h-full object-cover" /> : initials(headerTitle)}
             {dmPartner && <span className="absolute -right-px -bottom-px w-2.5 h-2.5 rounded-full z-10" style={{ background: dmPartner.status === 'ACTIVE' ? 'var(--online)' : dmPartner.status === 'AWAY' ? 'var(--away)' : 'var(--t3)', border: '2px solid var(--bg)' }} />}
-          </span>
+          </button>
         )}
         <div className="flex-1 min-w-0">
-          <div className="text-[15.5px] font-semibold text-t1 leading-tight truncate">{headerTitle}</div>
+          {dmPartner ? (
+            <button onClick={() => openProfile(dmPartner.username)} className="text-[15.5px] font-semibold text-t1 leading-tight truncate hover:underline decoration-border block max-w-full text-left">{headerTitle}</button>
+          ) : (
+            <div className="text-[15.5px] font-semibold text-t1 leading-tight truncate">{headerTitle}</div>
+          )}
           {isChannel ? (
             editingTopic ? (
               <input
@@ -1255,9 +1261,9 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                     grouped ? (
                       <span className="w-7 flex-none" />
                     ) : (
-                      <span className="relative overflow-hidden w-7 h-7 rounded-full grid place-items-center flex-none text-[11px] font-semibold text-white mt-5" style={{ background: src ? 'transparent' : toneFor(msg.sender?.username || '?'), boxShadow: ringFor(msg.sender) }} title={msg.sender?.role === 'ADMIN' ? 'Admin' : undefined}>
+                      <button onClick={() => openProfile(msg.sender?.username)} className="relative overflow-hidden w-7 h-7 rounded-full grid place-items-center flex-none text-[11px] font-semibold text-white mt-5 cursor-pointer hover:opacity-85 transition-opacity" style={{ background: src ? 'transparent' : toneFor(msg.sender?.username || '?'), boxShadow: ringFor(msg.sender) }} title={`View ${displayOf(msg.sender)}`}>
                         {src ? <img src={src} alt="" className="absolute inset-0 w-full h-full object-cover" /> : initials(msg.sender?.username || '?')}
-                      </span>
+                      </button>
                     )
                   )}
 
@@ -1265,7 +1271,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                     {/* meta */}
                     {!grouped && (
                       <div className={`flex items-baseline gap-2 mb-1 ${isMe ? 'flex-row-reverse' : ''}`}>
-                        {isMe ? <span className="text-[13px] font-semibold text-t1">You</span> : <HoverCard user={msg.sender} className="text-[13px] font-semibold text-t1 cursor-default hover:underline decoration-border">{displayOf(msg.sender)}</HoverCard>}
+                        {isMe ? <span className="text-[13px] font-semibold text-t1">You</span> : <HoverCard user={msg.sender} onClick={() => openProfile(msg.sender?.username)} className="text-[13px] font-semibold text-t1 cursor-pointer hover:underline decoration-border">{displayOf(msg.sender)}</HoverCard>}
                         <span className="text-[11px] text-t3" title={new Date(msg.timestamp).toLocaleString()}>{fmt(msg.timestamp)}</span>
                         {msg.edited && !isDeleted && <span className="text-[11px] text-t3 italic">edited</span>}
                         {msg.pinned && <Pin className="w-[11px] h-[11px] text-accent-text" />}
