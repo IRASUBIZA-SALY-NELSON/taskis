@@ -303,6 +303,65 @@ function RecapCard({ posts, streak }: { posts: any[]; streak: number }) {
   );
 }
 
+function RightRail({ user, people }: { user: any; people: any[] }) {
+  const messageThem = (op: any) => {
+    const ids = [user.id, op.id].sort((a: number, b: number) => a - b);
+    window.dispatchEvent(new CustomEvent('open-channel', { detail: `dm_${ids[0]}_${ids[1]}` }));
+  };
+  const active = people.filter((o) => o.status === 'ACTIVE');
+  const suggestions = people.slice(0, 5);
+  return (
+    <>
+      {/* your mini profile */}
+      <div className="card p-4">
+        <div className="flex items-center gap-3">
+          <button onClick={() => window.dispatchEvent(new CustomEvent('open-profile', { detail: user.username }))} className="hover:opacity-85 transition-opacity flex-none"><Avatar u={user} size={44} /></button>
+          <div className="min-w-0">
+            <div className="text-[14px] font-semibold text-t1 truncate">{displayOf(user)}</div>
+            <button onClick={() => window.dispatchEvent(new CustomEvent('open-profile', { detail: user.username }))} className="text-[12px] text-accent-text hover:underline">View profile</button>
+          </div>
+        </div>
+      </div>
+
+      {active.length > 0 && (
+        <div className="card p-4">
+          <div className="eyebrow mb-3">Active now</div>
+          <div className="flex flex-col gap-2.5">
+            {active.slice(0, 6).map((op) => (
+              <button key={op.id} onClick={() => messageThem(op)} className="flex items-center gap-2.5 text-left group">
+                <span className="relative flex-none"><Avatar u={op} size={30} /><span className="absolute -right-px -bottom-px w-2.5 h-2.5 rounded-full" style={{ background: 'var(--online)', border: '2px solid var(--surface-1)' }} /></span>
+                <span className="text-[13px] text-t1 truncate flex-1 group-hover:text-accent-text transition-colors">{displayOf(op)}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="card p-4">
+        <div className="eyebrow mb-3">Suggestions</div>
+        {suggestions.length === 0 ? (
+          <div className="text-[12.5px] text-t3">No one else here yet.</div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {suggestions.map((op) => (
+              <div key={op.id} className="flex items-center gap-2.5">
+                <button onClick={() => window.dispatchEvent(new CustomEvent('open-profile', { detail: op.username }))} className="flex-none hover:opacity-85"><Avatar u={op} size={32} /></button>
+                <div className="flex-1 min-w-0">
+                  <button onClick={() => window.dispatchEvent(new CustomEvent('open-profile', { detail: op.username }))} className="text-[13px] font-medium text-t1 truncate hover:underline block max-w-full text-left">{displayOf(op)}</button>
+                  <div className="text-[11.5px] text-t3 truncate">@{op.username}</div>
+                </div>
+                <button onClick={() => messageThem(op)} className="btn-secondary px-2.5 py-1 text-[12px] flex-none">Message</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="px-2 text-[11px] text-t3 leading-relaxed">Posts vanish 24 hours after sharing · Taskis</div>
+    </>
+  );
+}
+
 function SkeletonCard() {
   return (
     <div className="card overflow-hidden">
@@ -338,7 +397,14 @@ export default function PostsFeed({ user, onToggleSidebar }: { user: any; onTogg
   const [now, setNow] = useState(() => 0);
   const [newPosts, setNewPosts] = useState(0);
   const [streak, setStreak] = useState(0);
+  const [people, setPeople] = useState<any[]>([]);
   useEffect(() => { setStreak(recordVisit()); markFeature('recap'); }, []);
+  useEffect(() => {
+    fetch(api('/api/chat/users'), { headers: { Authorization: `Bearer ${token()}` } })
+      .then((r) => r.json())
+      .then((d) => Array.isArray(d) && setPeople(d.filter((x: any) => x.username !== user.username && x.username !== 'Taskis Bot')))
+      .catch(() => {});
+  }, [user.username]);
   const fileRef = useRef<HTMLInputElement>(null);
   const capRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -494,7 +560,8 @@ export default function PostsFeed({ user, onToggleSidebar }: { user: any; onTogg
           )}
         </AnimatePresence>
 
-        <div className="max-w-[560px] mx-auto px-4 py-6 flex flex-col gap-5">
+        <div className="mx-auto max-w-[940px] px-4 py-6 flex gap-8 items-start">
+        <div className="flex-1 min-w-0 max-w-[560px] mx-auto lg:mx-0 flex flex-col gap-5">
           {!loading && <RecapCard posts={posts} streak={streak} />}
           {/* composer */}
           <div className="card p-4" onDragOver={(e) => e.preventDefault()} onDrop={onComposerDrop}>
@@ -541,6 +608,11 @@ export default function PostsFeed({ user, onToggleSidebar }: { user: any; onTogg
               {!hasMore && visible.length > 4 && <div className="text-center text-[12px] text-t3 py-3">You're all caught up</div>}
             </>
           )}
+        </div>
+
+        <aside className="hidden lg:block w-[300px] flex-none sticky top-3 space-y-4">
+          <RightRail user={user} people={people} />
+        </aside>
         </div>
       </div>
 

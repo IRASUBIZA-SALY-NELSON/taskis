@@ -38,8 +38,10 @@ export default function AppShell({ initialChannel = 'general' }: { initialChanne
       const name = (e as CustomEvent).detail as string;
       setActiveChannel((curr) => { if (!isProfileView(curr)) prevChannelRef.current = curr; return name ? `__user__:${name}` : '__me__'; });
     };
+    const openChannel = (e: Event) => { const c = (e as CustomEvent).detail as string; if (c) setActiveChannel(c); };
     window.addEventListener('open-profile', openProfile);
-    return () => window.removeEventListener('open-profile', openProfile);
+    window.addEventListener('open-channel', openChannel);
+    return () => { window.removeEventListener('open-profile', openProfile); window.removeEventListener('open-channel', openChannel); };
   }, []);
 
   useEffect(() => {
