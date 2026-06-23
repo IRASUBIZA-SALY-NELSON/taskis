@@ -5,7 +5,12 @@ import { useEffect, useState } from 'react';
 export interface CustomEmoji { id: number; name: string; url: string; createdBy?: string }
 
 const api = (p: string) => `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:8080${p}`;
-const abs = (u: string) => (u?.startsWith('http') ? u : api(u));
+const withTok = (u: string) => {
+  if (!u || !u.includes('/api/files/')) return u;
+  let t = ''; try { t = localStorage.getItem('token') || ''; } catch { /* noop */ }
+  return t ? u + (u.includes('?') ? '&' : '?') + 't=' + encodeURIComponent(t) : u;
+};
+const abs = (u: string) => withTok(u?.startsWith('http') ? u : api(u));
 
 let list: CustomEmoji[] = [];
 let map: Record<string, string> = {};

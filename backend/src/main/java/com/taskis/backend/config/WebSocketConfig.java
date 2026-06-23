@@ -29,6 +29,25 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Autowired
     private UserDetailsService userDetailsService;
 
+    @Autowired
+    private com.taskis.backend.repositories.UserRepository userRepository;
+
+    /** Mirror of the REST channel ACL — authorizes which topics a client may subscribe to. */
+    private boolean canAccess(String username, String channel) {
+        if (channel == null || channel.equals("feed")) return true; // public feed topic
+        com.taskis.backend.models.User u = username == null ? null : userRepository.findByUsername(username).orElse(null);
+        if (u == null) return false;
+        if (channel.startsWith("dm_")) {
+            String[] parts = channel.split("_");
+            if (parts.length != 3 || u.getId() == null) return false;
+            try {
+                return u.getId().equals(Long.parseLong(parts[1])) || u.getId().equals(Long.parseLong(parts[2]));
+            } catch (NumberFormatException e) { return false; }
+        }
+        if (channel.equals("confidential")) return Boolean.TRUE.equals(u.getConfidentialUnlocked());
+        return true;
+    }
+
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
         config.enableSimpleBroker("/topic", "/queue");
@@ -66,6 +85,19 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                             }
                         } catch (Exception e) {
                             System.out.println("Invalid WebSocket JWT: " + e.getMessage());
+                        }
+                    }
+                }
+                // Authorize subscriptions: a client may only subscribe to topics it can access.
+                if (StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
+                    String dest = accessor.getDestination();
+                    if (dest != null && dest.startsWith("/topic/")) {
+                        String ch = dest.substring("/topic/".length());
+                        if (ch.endsWith(".typing")) ch = ch.substring(0, ch.length() - ".typing".length());
+                        String username = accessor.getUser() != null ? accessor.getUser().getName() : null;
+                        if (!canAccess(username, ch)) {
+                            // Drop the subscription silently — the client simply receives nothing.
+                            return null;
                         }
                     }
                 }

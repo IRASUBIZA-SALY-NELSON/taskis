@@ -60,4 +60,13 @@ public class JwtUtil {
         final String extractedUsername = extractUsername(token);
         return (extractedUsername.equals(username) && !isTokenExpired(token));
     }
+
+    /** Signature + expiry check only (no username binding) — for resource access like files. */
+    public boolean isTokenValid(String token) {
+        try {
+            return token != null && !isTokenExpired(token);
+        } catch (Exception e) {
+            return false;
+        }
+    }
 }

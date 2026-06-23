@@ -45,10 +45,19 @@ export function defaultAvatarUrl(name: string) {
   return `https://api.dicebear.com/7.x/thumbs/svg?radius=50&backgroundType=gradientLinear&seed=${encodeURIComponent(name || 'taskis')}`;
 }
 
+/** Append the auth token to a protected /api/files URL so <img>/<iframe>/fetch can load it. */
+export function withFileToken(url: string): string {
+  if (!url || !url.includes('/api/files/')) return url;
+  let tok = '';
+  try { tok = localStorage.getItem('token') || ''; } catch { /* noop */ }
+  if (!tok) return url;
+  return url + (url.includes('?') ? '&' : '?') + 't=' + encodeURIComponent(tok);
+}
+
 /** Resolve a user's avatar URL, falling back to a generated default profile. */
 export function avatarFor(u: any) {
   const raw = u?.avatarUrl;
-  if (raw) return raw.startsWith('http') ? raw : `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:8080${raw}`;
+  if (raw) return withFileToken(raw.startsWith('http') ? raw : `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:8080${raw}`);
   return defaultAvatarUrl(u?.username || '?');
 }
 
@@ -136,7 +145,7 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
   };
 
   const avatarSrc = (u: any) =>
-    u.avatarUrl ? (u.avatarUrl.startsWith('http') ? u.avatarUrl : api(u.avatarUrl)) : defaultAvatarUrl(u.username);
+    u.avatarUrl ? withFileToken(u.avatarUrl.startsWith('http') ? u.avatarUrl : api(u.avatarUrl)) : defaultAvatarUrl(u.username);
 
   const select = (c: string) => {
     setActiveChannel(c);

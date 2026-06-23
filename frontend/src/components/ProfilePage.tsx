@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Menu, MessageSquare, Pencil, Shield, Check, Heart, MessageCircle, Image as ImageIcon, ArrowLeft } from 'lucide-react';
-import { initials, toneFor, displayOf, avatarFor, ringFor } from './Sidebar';
+import { initials, toneFor, displayOf, avatarFor, ringFor, withFileToken } from './Sidebar';
 import ProfileModal from './ProfileModal';
 import { FONT_OPTIONS, getFontId, applyFont } from '@/lib/prefs';
 import { getNotifyPrefs, setNotifyPrefs, getDnd, setDnd, requestNotificationPermission, notificationsEnabled } from '@/lib/notify';
@@ -13,7 +13,7 @@ import { markFeature } from '@/lib/features';
 
 const api = (p: string) => `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:8080${p}`;
 const authH = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
-const fullMedia = (u?: string) => (!u ? '' : u.startsWith('http') ? u : api(u));
+const fullMedia = (u?: string) => (!u ? '' : withFileToken(u.startsWith('http') ? u : api(u)));
 
 function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
   return (

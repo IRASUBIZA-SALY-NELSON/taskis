@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Send, Paperclip, FileText, Download, Lock, Menu, X, AlertCircle, MessageSquare, MoreVertical, Reply, Pencil, Trash2, SmilePlus, CheckCheck, Search, Pin, Bookmark, BookmarkCheck, Mic, Square, Smile, Copy, Eye, FolderUp, KeyRound, CircleCheck, Circle, ListChecks } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { initials, toneFor, displayOf, defaultAvatarUrl, avatarFor, ringFor } from './Sidebar';
+import { initials, toneFor, displayOf, avatarFor, ringFor, withFileToken } from './Sidebar';
 import { subscribe, publish } from '@/lib/ws';
 import EmojiGifPicker from './EmojiGifPicker';
 import { useToast } from './Toast';
@@ -123,30 +123,39 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
       .then((r) => r.json()).then((d) => Array.isArray(d) && setMembers(d)).catch(() => {});
   }, []);
 
-  // #confidential passkey gate — remembered per browser session, per user.
-  const confidKey = `taskis-confid-${user.username}`;
+  // #confidential gate — enforced server-side. The passkey lives ONLY on the
+  // backend; here we just reflect whether this account has unlocked it.
+  const [unlocking, setUnlocking] = useState(false);
+  const confidUnlockedRef = useRef(!!user.confidentialUnlocked);
   useEffect(() => {
     setSelectMode(false);
     setSelected(new Set());
     setPassInput('');
     setPassErr(false);
     if (channel !== 'confidential') { setConfidUnlocked(true); return; }
-    let ok = false;
-    try { ok = sessionStorage.getItem(confidKey) === '1'; } catch { /* noop */ }
-    setConfidUnlocked(ok);
-  }, [channel, confidKey]);
+    setConfidUnlocked(!!user.confidentialUnlocked || confidUnlockedRef.current);
+  }, [channel, user.confidentialUnlocked]);
 
-  const unlockConfidential = (e: React.FormEvent) => {
+  const unlockConfidential = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (passInput.trim() === '20300') {
-      try { sessionStorage.setItem(confidKey, '1'); } catch { /* noop */ }
-      setConfidUnlocked(true);
-      setPassInput('');
-      setPassErr(false);
-      markFeature('confidential');
-    } else {
+    setUnlocking(true);
+    setPassErr(false);
+    try {
+      const r = await fetch(api('/api/chat/unlock-confidential'), { method: 'POST', headers: authH(), body: JSON.stringify({ passphrase: passInput.trim() }) });
+      if (r.ok) {
+        confidUnlockedRef.current = true;
+        setConfidUnlocked(true);
+        setPassInput('');
+        markFeature('confidential');
+        try { const u = JSON.parse(localStorage.getItem('user') || '{}'); u.confidentialUnlocked = true; localStorage.setItem('user', JSON.stringify(u)); } catch { /* noop */ }
+        fetchMsgs();
+      } else {
+        setPassErr(true);
+      }
+    } catch {
       setPassErr(true);
     }
+    setUnlocking(false);
   };
 
   useEffect(() => { if (isSelfNotes) markFeature('notes'); }, [isSelfNotes]);
@@ -236,9 +245,15 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     // restore any unsent draft for this channel
     try { setInput(localStorage.getItem(`draft_${channel}`) || ''); } catch { setInput(''); }
     setTimeout(() => autoGrow(), 0);
+    // Don't fetch a gated channel until it's unlocked (avoids a 403 logout loop).
+    if (channel === 'confidential' && !user.confidentialUnlocked && !confidUnlockedRef.current) { setLoading(false); return; }
     fetch(api(`/api/chat/messages/${channel}`), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
-      .then((r) => { if (r.status === 401 || r.status === 403) { localStorage.clear(); window.location.href = '/'; } return r.json(); })
-      .then((d) => { setMessages(d); setLoading(false); markChannelSeen(); })
+      .then((r) => {
+        if (r.status === 403 && channel === 'confidential') { setConfidUnlocked(false); setLoading(false); return null; }
+        if (r.status === 401 || r.status === 403) { localStorage.clear(); window.location.href = '/'; return null; }
+        return r.json();
+      })
+      .then((d) => { if (d) { setMessages(d); setLoading(false); markChannelSeen(); } })
       .catch(() => setLoading(false));
   }, [channel]);
 
@@ -259,6 +274,8 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
         return copy;
       });
     };
+    // Don't subscribe to a gated channel we haven't unlocked — the server rejects it.
+    if (channel === 'confidential' && !confidUnlocked) return;
     const offMsg = subscribe(`/topic/${channel}`, upsert);
     const offTyping = subscribe(`/topic/${channel}.typing`, (e: any) => {
       if (!e || !e.username || e.username === user.username) return;
@@ -269,7 +286,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
       }, 3500);
     });
     return () => { offMsg(); offTyping(); };
-  }, [channel, user.username]);
+  }, [channel, user.username, confidUnlocked]);
 
   useEffect(() => {
     messages.forEach((msg) => {
@@ -671,8 +688,8 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     return [{ url: raw, type: msg.attachmentType || 'application/octet-stream' }];
   };
 
-  const toFull = (u: string) => (u.startsWith('http') ? u : api(u));
-  const dlHref = (full: string) => (full.includes('/api/files/') ? `${full}?dl=1` : full);
+  const toFull = (u: string) => withFileToken(u.startsWith('http') ? u : api(u));
+  const dlHref = (full: string) => (full.includes('/api/files/') ? `${full}${full.includes('?') ? '&' : '?'}dl=1` : full);
   const openPreview = (a: { url: string; type: string }) => {
     markFeature('preview');
     setPreviewAtt({ url: toFull(a.url), type: a.type, name: fileNameOf(a.url) });
@@ -1003,7 +1020,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   const actionBtnCls = 'w-[26px] h-[26px] grid place-items-center rounded-lg bg-surface-2 border border-border text-t2 hover:text-t1 hover:border-border-strong transition-colors cursor-pointer';
 
   const ThreadRow = ({ m }: { m: any }) => {
-    const src = m.sender?.avatarUrl ? (m.sender.avatarUrl.startsWith('http') ? m.sender.avatarUrl : api(m.sender.avatarUrl)) : defaultAvatarUrl(m.sender?.username || '?');
+    const src = avatarFor(m.sender);
     const me = m.sender?.username === user.username;
     return (
       <div className="flex gap-2.5">
@@ -1050,7 +1067,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
             {passErr && (
               <div className="flex items-center justify-center gap-1.5 mt-2.5 text-[12.5px] text-danger"><AlertCircle className="w-[13px] h-[13px] flex-none" /><span>Incorrect passkey. Try again.</span></div>
             )}
-            <button type="submit" disabled={!passInput.trim()} className="btn-accent w-full py-[11px] text-sm mt-[22px]"><Lock className="w-[14px] h-[14px]" />Unlock channel</button>
+            <button type="submit" disabled={!passInput.trim() || unlocking} className="btn-accent w-full py-[11px] text-sm mt-[22px]">{unlocking ? <span className="w-[14px] h-[14px] rounded-full border-2 border-white/35 border-t-white tk-spin" /> : <Lock className="w-[14px] h-[14px]" />}Unlock channel</button>
           </form>
         </div>
       </div>
@@ -1219,7 +1236,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
             const selectable = canDelete(msg);
             const isSelected = typeof msg.id === 'number' && selected.has(msg.id);
             const isPoll = !isDeleted && typeof msg.content === 'string' && msg.content.startsWith('::poll::');
-            const src = msg.sender?.avatarUrl ? (msg.sender.avatarUrl.startsWith('http') ? msg.sender.avatarUrl : api(msg.sender.avatarUrl)) : defaultAvatarUrl(msg.sender?.username || '?');
+            const src = avatarFor(msg.sender);
 
             return (
               <React.Fragment key={msg.id || idx}>
@@ -1427,7 +1444,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                         <button onClick={() => setThreadRoot(msg)} className={`flex items-center gap-2 mt-1.5 pl-1 pr-3 py-1 rounded-full hover:bg-hover transition-colors ${isMe ? 'self-end' : 'self-start'}`}>
                           <span className="flex -space-x-1.5">
                             {parts.slice(0, 3).map((p, pi) => {
-                              const psrc = p?.avatarUrl ? (p.avatarUrl.startsWith('http') ? p.avatarUrl : api(p.avatarUrl)) : defaultAvatarUrl(p?.username || '?');
+                              const psrc = avatarFor(p);
                               return (
                                 <span key={pi} className="relative w-[18px] h-[18px] rounded-full grid place-items-center text-[9px] font-semibold text-white overflow-hidden" style={{ background: psrc ? 'transparent' : toneFor(p?.username || '?'), border: '1.5px solid var(--surface-1)' }}>
                                   {psrc ? <img src={psrc} alt="" className="absolute inset-0 w-full h-full object-cover" /> : initials(p?.username || '?')}

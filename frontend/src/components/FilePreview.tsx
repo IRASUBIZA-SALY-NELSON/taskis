@@ -64,7 +64,7 @@ export default function FilePreview({ att, onClose }: { att: PreviewAtt | null; 
 
   if (typeof document === 'undefined') return null;
 
-  const dl = att ? (att.url.includes('/api/files/') ? `${att.url}?dl=1` : att.url) : '#';
+  const dl = att ? (att.url.includes('/api/files/') ? `${att.url}${att.url.includes('?') ? '&' : '?'}dl=1` : att.url) : '#';
 
   return createPortal(
     <AnimatePresence>

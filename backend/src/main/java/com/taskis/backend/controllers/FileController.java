@@ -18,6 +18,18 @@ public class FileController {
     @Autowired
     private FileCrypto fileCrypto;
 
+    @Autowired
+    private com.taskis.backend.security.JwtUtil jwtUtil;
+
+    /** Files require a valid token — via Authorization header or a `t` query param
+        (the latter so <img>/<iframe>/<video>, which can't set headers, still work). */
+    private boolean authorized(String authHeader, String tokenParam) {
+        String token = null;
+        if (authHeader != null && authHeader.startsWith("Bearer ")) token = authHeader.substring(7);
+        else if (tokenParam != null && !tokenParam.isBlank()) token = tokenParam;
+        return jwtUtil.isTokenValid(token);
+    }
+
     // Only these may be served inline; everything else is forced to download so an
     // uploaded .html/.svg/etc. can never execute script on the app origin.
     private static final java.util.Set<String> INLINE_OK = java.util.Set.of(
@@ -60,12 +72,19 @@ public class FileController {
 
     @GetMapping("/{id}/{name}")
     public ResponseEntity<?> withName(@PathVariable String id, @PathVariable String name,
-            @RequestParam(name = "dl", required = false) String dl) {
+            @RequestParam(name = "dl", required = false) String dl,
+            @RequestParam(name = "t", required = false) String t,
+            @org.springframework.web.bind.annotation.RequestHeader(name = "Authorization", required = false) String auth) {
+        if (!authorized(auth, t)) return ResponseEntity.status(401).build();
         return serve(id, name, dl != null);
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<?> byId(@PathVariable String id, @RequestParam(name = "dl", required = false) String dl) {
+    public ResponseEntity<?> byId(@PathVariable String id,
+            @RequestParam(name = "dl", required = false) String dl,
+            @RequestParam(name = "t", required = false) String t,
+            @org.springframework.web.bind.annotation.RequestHeader(name = "Authorization", required = false) String auth) {
+        if (!authorized(auth, t)) return ResponseEntity.status(401).build();
         return serve(id, null, dl != null);
     }
 }

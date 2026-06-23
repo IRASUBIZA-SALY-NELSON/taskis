@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Heart, MessageCircle, Image as ImageIcon, Trash2, Send, X, Smile, Clock, ArrowUp, Sparkles, Menu, ArrowBigUp, ArrowBigDown, Flag, Flame, Trophy, TrendingUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { initials, toneFor, displayOf, defaultAvatarUrl, ringFor } from './Sidebar';
+import { initials, toneFor, displayOf, defaultAvatarUrl, ringFor, withFileToken } from './Sidebar';
 import { subscribe } from '@/lib/ws';
 import EmojiGifPicker from './EmojiGifPicker';
 import { useToast } from './Toast';
@@ -18,7 +18,7 @@ const PAGE = 10;
 const api = (p: string) => `http://${window.location.hostname}:8080${p}`;
 const token = () => localStorage.getItem('token');
 const authJson = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` });
-const mediaUrl = (u?: string) => (!u ? '' : u.startsWith('http') ? u : api(u));
+const mediaUrl = (u?: string) => (!u ? '' : withFileToken(u.startsWith('http') ? u : api(u)));
 const openProfile = (uname?: string) => { if (uname && uname !== 'Taskis Bot') window.dispatchEvent(new CustomEvent('open-profile', { detail: uname })); };
 
 

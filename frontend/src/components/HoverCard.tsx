@@ -2,10 +2,10 @@
 
 import React, { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { initials, toneFor, displayOf, defaultAvatarUrl, ringFor } from './Sidebar';
+import { initials, toneFor, displayOf, defaultAvatarUrl, ringFor, withFileToken } from './Sidebar';
 
 const api = (p: string) => `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:8080${p}`;
-const mediaUrl = (u?: string) => (!u ? '' : u.startsWith('http') ? u : api(u));
+const mediaUrl = (u?: string) => (!u ? '' : withFileToken(u.startsWith('http') ? u : api(u)));
 
 function presence(status?: string) {
   if (status === 'ACTIVE') return { c: 'var(--online)', label: 'Online' };

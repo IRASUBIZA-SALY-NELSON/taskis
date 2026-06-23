@@ -1,6 +1,7 @@
 package com.taskis.backend.models;
 
 import jakarta.persistence.*;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Data;
 import java.util.Date;
 
@@ -16,15 +17,18 @@ public class User {
     @Column(unique = true, nullable = false)
     private String username;
 
+    @JsonIgnore
     @Convert(converter = com.taskis.backend.security.StringCryptoConverter.class)
     @Column(unique = true)
     private String email;
 
     private String role = "USER";
 
+    @JsonIgnore
     @Convert(converter = com.taskis.backend.security.StringCryptoConverter.class)
     private String registrationKey;
 
+    @JsonIgnore
     @Column(nullable = false)
     private String password;
 
@@ -36,6 +40,9 @@ public class User {
     private String status = "OFFLINE";
 
     private Boolean archiveUnlocked = false;
+
+    // Server-side gate for #confidential — set only after the correct passkey.
+    private Boolean confidentialUnlocked = false;
 
     private Integer failedArchiveAttempts = 0;
 
