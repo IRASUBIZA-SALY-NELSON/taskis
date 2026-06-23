@@ -55,6 +55,14 @@ export default function HoverCard({ user, children, className }: { user: any; ch
           <div className="flex items-center gap-1.5 mt-3 text-[12px] text-t2">
             <span className="w-[7px] h-[7px] rounded-full" style={{ background: p.c }} />{p.label}
           </div>
+          {user?.username && (
+            <button
+              onClick={() => { hide(); window.dispatchEvent(new CustomEvent('open-profile', { detail: user.username })); }}
+              className="btn-secondary w-full mt-3 py-2 text-[12.5px]"
+            >
+              View profile
+            </button>
+          )}
         </div>,
         document.body,
       )}

@@ -5,7 +5,6 @@ import { Hash, Lock, Shield, LogOut, Newspaper, Search, Radar, Megaphone, Bot, U
 import { useRouter } from 'next/navigation';
 import ThemeToggle from './ThemeToggle';
 import SettingsMenu from './SettingsMenu';
-import ProfileModal from './ProfileModal';
 import { disconnectWs } from '@/lib/ws';
 import { markFeature, FEATURES, getDone, onFeatureChange } from '@/lib/features';
 
@@ -64,7 +63,6 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
   const channels = ['general', 'intel', 'alerts', 'confidential'];
   const [operatives, setOperatives] = React.useState<any[]>([]);
   const [unread, setUnread] = React.useState<Record<string, boolean>>({});
-  const [showProfile, setShowProfile] = React.useState(false);
   const [favs, setFavs] = React.useState<string[]>([]);
 
   const [newCount, setNewCount] = React.useState(0);
@@ -268,14 +266,14 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
       <div className="border-t border-border px-3 py-[11px]">
         <div className="flex items-center gap-2.5">
           <button
-            onClick={() => setShowProfile(true)}
-            title="Edit profile"
+            onClick={() => select('__me__')}
+            title="Your profile"
             className="relative overflow-hidden w-8 h-8 rounded-full grid place-items-center flex-none text-xs font-semibold text-white hover:opacity-80 transition-opacity"
             style={{ background: avatarSrc(user) ? 'transparent' : toneFor(user.username), boxShadow: ringFor(user) }}
           >
             {avatarSrc(user) ? <img src={avatarSrc(user)!} alt="" className="absolute inset-0 w-full h-full object-cover" /> : initials(user.username)}
           </button>
-          <button onClick={() => setShowProfile(true)} className="flex-1 min-w-0 text-left">
+          <button onClick={() => select('__me__')} className="flex-1 min-w-0 text-left">
             <div className="text-[13.5px] font-semibold text-t1 truncate">{displayOf(user)}</div>
             {user.customStatus ? (
               <div className="text-[12px] text-t2 truncate">{user.customStatus}</div>
@@ -301,7 +299,6 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
         </div>
       </div>
 
-      {showProfile && <ProfileModal user={user} onClose={() => setShowProfile(false)} />}
       </aside>
     </>
   );

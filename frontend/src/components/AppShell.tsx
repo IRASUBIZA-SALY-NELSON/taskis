@@ -6,6 +6,7 @@ import { MotionConfig } from 'framer-motion';
 import Sidebar from '@/components/Sidebar';
 import ChatArea from '@/components/ChatArea';
 import PostsFeed from '@/components/PostsFeed';
+import ProfilePage from '@/components/ProfilePage';
 import NotificationManager from '@/components/NotificationManager';
 import CommandPalette from '@/components/CommandPalette';
 import ShortcutsHelp from '@/components/ShortcutsHelp';
@@ -29,6 +30,15 @@ export default function AppShell({ initialChannel = 'general' }: { initialChanne
   }, [router]);
 
   useEffect(() => { initAccent(); return initThemeWatcher(); }, []);
+
+  useEffect(() => {
+    const openProfile = (e: Event) => {
+      const name = (e as CustomEvent).detail as string;
+      setActiveChannel(name ? `__user__:${name}` : '__me__');
+    };
+    window.addEventListener('open-profile', openProfile);
+    return () => window.removeEventListener('open-profile', openProfile);
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -66,6 +76,13 @@ export default function AppShell({ initialChannel = 'general' }: { initialChanne
           <main className="flex-1 flex flex-col relative h-full min-w-0 bg-bg">
             {activeChannel === '__posts__' ? (
               <PostsFeed user={user} onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
+            ) : activeChannel === '__me__' || activeChannel.startsWith('__user__:') ? (
+              <ProfilePage
+                me={user}
+                username={activeChannel === '__me__' ? user.username : activeChannel.slice('__user__:'.length)}
+                onNavigate={setActiveChannel}
+                onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+              />
             ) : (
               <ChatArea user={user} channel={activeChannel} onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
             )}

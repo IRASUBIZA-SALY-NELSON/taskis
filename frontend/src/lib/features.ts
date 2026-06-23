@@ -14,6 +14,7 @@ export interface FeatureItem {
 }
 
 export const FEATURES: FeatureItem[] = [
+  { key: 'profile', title: 'Your profile page', desc: 'Click your name in the sidebar — manage profile, settings & posts in one place.' },
   { key: 'polls', title: 'Polls', desc: 'Tap the poll button in the composer to ask the team.' },
   { key: 'notes', title: 'Notes to self', desc: 'Open “Notes” in the sidebar — a private space just for you.' },
   { key: 'rings', title: 'Custom avatar ring', desc: 'Pick a ring color in your profile.' },
@@ -25,7 +26,7 @@ export const FEATURES: FeatureItem[] = [
   { key: 'accent', title: 'Pick your accent', desc: 'Recolor the whole app from Settings → Accent.' },
 ];
 
-const KEY = 'taskis-features-v4';
+const KEY = 'taskis-features-v5';
 const EVT = 'taskis:feature';
 
 interface State { seen?: boolean; dismissed?: boolean; done?: string[] }

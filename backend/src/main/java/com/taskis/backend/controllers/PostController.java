@@ -112,6 +112,21 @@ public class PostController {
         return ResponseEntity.ok(out);
     }
 
+    @GetMapping("/by/{username}")
+    public ResponseEntity<?> byAuthor(@PathVariable String username, Principal principal) {
+        if (principal == null) return ResponseEntity.status(401).body("Unauthorized");
+        String me = principal.getName();
+        Date cutoff = new Date(System.currentTimeMillis() - ScheduledTasks.POST_TTL_MS);
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (Post p : postRepository.findByCreatedAtAfterOrderByCreatedAtDesc(cutoff)) {
+            if (p.getAuthor() != null && username.equals(p.getAuthor().getUsername())) {
+                out.add(postDto(p, me));
+                if (out.size() >= 50) break;
+            }
+        }
+        return ResponseEntity.ok(out);
+    }
+
     @PostMapping
     public ResponseEntity<?> create(@RequestBody Map<String, String> body, Principal principal) {
         if (principal == null) return ResponseEntity.status(401).body("Unauthorized");

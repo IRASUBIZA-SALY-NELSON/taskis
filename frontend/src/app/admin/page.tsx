@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, Plus, Copy, Check, RefreshCw, Power, Trash2, KeyRound } from 'lucide-react';
+import { ChevronLeft, Plus, Copy, Check, RefreshCw, Power, Trash2, KeyRound, Users, Activity, MessageSquare, Newspaper, Flag, Crown, ArrowUpDown, Skull, ShieldAlert } from 'lucide-react';
 import ThemeToggle from '../../components/ThemeToggle';
 import { initials, toneFor } from '../../components/Sidebar';
 import { useToast } from '../../components/Toast';
@@ -16,6 +16,10 @@ export default function AdminDashboard() {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [newUsername, setNewUsername] = useState('');
   const [loading, setLoading] = useState(false);
+  const [stats, setStats] = useState<any>(null);
+  const [destruct, setDestruct] = useState<{ kind: 'all' | 'user'; user?: any } | null>(null);
+  const [destructText, setDestructText] = useState('');
+  const [destructing, setDestructing] = useState(false);
 
   const api = (p: string) => `http://${window.location.hostname}:8080${p}`;
   const authJson = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` });
@@ -32,14 +36,16 @@ export default function AdminDashboard() {
 
   const fetchData = async () => {
     try {
-      const [uRes, kRes, rRes] = await Promise.all([
+      const [uRes, kRes, rRes, sRes] = await Promise.all([
         fetch(api('/api/admin/users'), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }),
         fetch(api('/api/admin/keys'), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }),
         fetch(api('/api/reports'), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }),
+        fetch(api('/api/admin/stats'), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }),
       ]);
       setUsers(await uRes.json());
       setKeys(await kRes.json());
       if (rRes.ok) setReports(await rRes.json());
+      if (sRes.ok) setStats(await sRes.json());
     } catch (e) { console.error(e); }
   };
 
@@ -54,6 +60,33 @@ export default function AdminDashboard() {
 
   const setActive = async (id: number, active: boolean) => {
     await fetch(api(`/api/admin/users/${id}/active`), { method: 'POST', headers: authJson(), body: JSON.stringify({ active }) });
+    fetchData();
+  };
+
+  const setRole = async (id: number, role: string, name: string) => {
+    if (!(await confirm({ title: role === 'ADMIN' ? `Make ${name} an admin?` : `Demote ${name} to member?`, body: role === 'ADMIN' ? 'Admins can manage everyone and access the danger zone.' : 'They lose admin powers.', confirmText: role === 'ADMIN' ? 'Promote' : 'Demote' }))) return;
+    await fetch(api(`/api/admin/users/${id}/role`), { method: 'POST', headers: authJson(), body: JSON.stringify({ role }) });
+    fetchData();
+    toast(role === 'ADMIN' ? `${name} is now an admin` : `${name} demoted`, 'success');
+  };
+
+  const runDestruct = async () => {
+    if (destructText !== 'DESTRUCT' || !destruct) return;
+    setDestructing(true);
+    try {
+      if (destruct.kind === 'all') {
+        const r = await fetch(api('/api/admin/self-destruct'), { method: 'POST', headers: authJson(), body: JSON.stringify({ confirm: 'DESTRUCT' }) });
+        if (r.ok) { const d = await r.json(); toast(`Wiped. ${d.filesRemoved ?? 0} files removed.`, 'success'); }
+        else toast((await r.text()) || 'Failed', 'error');
+      } else {
+        const r = await fetch(api(`/api/admin/destruct-user/${destruct.user.id}`), { method: 'POST', headers: authJson(), body: JSON.stringify({ confirm: 'DESTRUCT' }) });
+        if (r.ok) toast(`${destruct.user.username} destructed`, 'success');
+        else toast((await r.text()) || 'Failed', 'error');
+      }
+    } catch { toast('Network error', 'error'); }
+    setDestructing(false);
+    setDestruct(null);
+    setDestructText('');
     fetchData();
   };
 
@@ -130,6 +163,26 @@ export default function AdminDashboard() {
       </header>
 
       <div className="max-w-[860px] mx-auto px-7 pt-[30px] pb-16 flex flex-col gap-[26px]">
+        {/* dashboard stats */}
+        {stats && (
+          <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            {[
+              { icon: Users, label: 'Members', value: stats.users },
+              { icon: Activity, label: 'Active now', value: stats.activeNow, accent: true },
+              { icon: MessageSquare, label: 'Messages', value: stats.messages },
+              { icon: Newspaper, label: 'Posts', value: stats.posts },
+              { icon: Flag, label: 'Reports', value: stats.reports },
+              { icon: KeyRound, label: 'Keys', value: stats.keys },
+            ].map((s) => (
+              <div key={s.label} className="card p-3.5">
+                <s.icon className="w-[15px] h-[15px] mb-1.5" style={{ color: s.accent ? 'var(--online)' : 'var(--t3)' }} />
+                <div className="text-[20px] font-semibold text-t1 leading-none tabular-nums">{s.value ?? '—'}</div>
+                <div className="text-[11.5px] text-t3 mt-1">{s.label}</div>
+              </div>
+            ))}
+          </section>
+        )}
+
         {/* generate */}
         <section className="card p-[22px]">
           <div className="eyebrow mb-1">Invite</div>
@@ -205,11 +258,17 @@ export default function AdminDashboard() {
                 {!isAdmin && k && !k.revoked && (
                   <button onClick={() => revokeKey(k.id, u.username)} className="icon-btn w-[30px] h-[30px] border-0" title="Revoke key"><KeyRound className="w-[15px] h-[15px]" /></button>
                 )}
+                <button onClick={() => setRole(u.id, isAdmin ? 'USER' : 'ADMIN', u.username)} className="icon-btn w-[30px] h-[30px] border-0" title={isAdmin ? 'Demote to member' : 'Make admin'}>
+                  {isAdmin ? <ArrowUpDown className="w-[15px] h-[15px]" /> : <Crown className="w-[15px] h-[15px]" />}
+                </button>
                 {!isAdmin && (
                   <button onClick={() => setActive(u.id, inactive)} className="icon-btn w-[30px] h-[30px] border-0" title={inactive ? 'Reactivate' : 'Deactivate'} style={inactive ? { color: 'var(--online)' } : undefined}><Power className="w-[15px] h-[15px]" /></button>
                 )}
                 {!isAdmin && (
                   <button onClick={() => removeUser(u.id, u.username)} className="icon-btn w-[30px] h-[30px] border-0 hover:!text-danger" title="Remove member"><Trash2 className="w-[15px] h-[15px]" /></button>
+                )}
+                {!isAdmin && (
+                  <button onClick={() => { setDestruct({ kind: 'user', user: u }); setDestructText(''); }} className="icon-btn w-[30px] h-[30px] border-0 hover:!text-danger" title="Destruct (erase person & all their data)"><Skull className="w-[15px] h-[15px]" /></button>
                 )}
               </div>
             </div>
@@ -248,7 +307,53 @@ export default function AdminDashboard() {
             </div>
           ))}
         </section>
+
+        {/* danger zone */}
+        <section className="card overflow-hidden" style={{ borderColor: 'var(--danger)' }}>
+          <div className="flex items-center gap-2 px-[22px] pt-[18px] pb-3.5 border-b border-border">
+            <ShieldAlert className="w-[16px] h-[16px]" style={{ color: 'var(--danger)' }} />
+            <h2 className="text-[15px] font-semibold" style={{ color: 'var(--danger)' }}>Danger zone</h2>
+          </div>
+          <div className="px-[22px] py-4">
+            <div className="text-[14px] font-semibold text-t1">Self-destruct</div>
+            <p className="text-[13px] text-t2 mt-1 leading-relaxed max-w-[560px]">
+              Permanently wipes <b>all messages, posts, reports, custom emoji, registration keys</b>, every non-admin account, and all uploaded files. Admin accounts are kept so you can still sign in. This cannot be undone.
+            </p>
+            <p className="text-[12px] text-t3 mt-2 max-w-[560px]">
+              Removing the server services, the database file, and the codebase itself is intentionally <b>not</b> available here — run <span className="font-mono">teardown.sh</span> on the server for the full machine wipe.
+            </p>
+            <button onClick={() => { setDestruct({ kind: 'all' }); setDestructText(''); }} className="btn-accent px-4 py-2.5 text-sm mt-4" style={{ background: 'var(--danger)' }}>
+              <Skull className="w-[15px] h-[15px]" />Self-destruct the database
+            </button>
+          </div>
+        </section>
       </div>
+
+      {/* destruct confirmation */}
+      {destruct && (
+        <div onClick={() => !destructing && setDestruct(null)} className="fixed inset-0 z-[460] flex items-center justify-center p-6" style={{ background: 'rgba(7,7,9,0.6)', backdropFilter: 'blur(3px)' }}>
+          <div onClick={(e) => e.stopPropagation()} className="card w-[420px] max-w-full p-6" style={{ boxShadow: 'var(--shadow-lg)' }}>
+            <div className="w-11 h-11 rounded-xl grid place-items-center mb-4" style={{ background: 'var(--danger-soft)', color: 'var(--danger)' }}><Skull className="w-5 h-5" /></div>
+            <h2 className="text-lg font-semibold text-t1 mb-1.5">
+              {destruct.kind === 'all' ? 'Self-destruct the database?' : `Destruct ${destruct.user?.username}?`}
+            </h2>
+            <p className="text-[13.5px] text-t2 leading-[1.55] mb-4">
+              {destruct.kind === 'all'
+                ? 'This erases all conversations, posts, reports, keys, non-admin accounts, and uploaded files. There is no undo.'
+                : `This permanently erases ${destruct.user?.username} and every message, post and comment they created. There is no undo.`}
+            </p>
+            <label className="eyebrow block mb-1.5">Type DESTRUCT to confirm</label>
+            <input autoFocus value={destructText} onChange={(e) => setDestructText(e.target.value)} placeholder="DESTRUCT" className="tk-input mb-5" />
+            <div className="flex gap-2.5">
+              <button onClick={() => { setDestruct(null); setDestructText(''); }} className="btn-secondary flex-1 py-[11px] text-sm">Cancel</button>
+              <button onClick={runDestruct} disabled={destructText !== 'DESTRUCT' || destructing} className="btn-accent flex-1 py-[11px] text-sm" style={{ background: 'var(--danger)' }}>
+                {destructing && <span className="w-[14px] h-[14px] rounded-full border-2 border-white/35 border-t-white tk-spin" />}
+                {destruct.kind === 'all' ? 'Wipe everything' : 'Destruct'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
