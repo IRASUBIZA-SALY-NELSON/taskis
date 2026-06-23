@@ -63,7 +63,31 @@ public class ChatController {
                 return false;
             }
         }
+        // #confidential is gated: only users who entered the passkey are admitted.
+        if ("confidential".equals(channel)) {
+            return Boolean.TRUE.equals(user.getConfidentialUnlocked());
+        }
         return true;
+    }
+
+    @org.springframework.beans.factory.annotation.Value("${confidential.passkey:20300}")
+    private String confidentialPasskey;
+
+    @PostMapping("/unlock-confidential")
+    public ResponseEntity<?> unlockConfidential(
+            @org.springframework.web.bind.annotation.RequestBody Map<String, String> payload, Principal principal) {
+        if (principal == null)
+            return ResponseEntity.status(401).body("Unauthorized");
+        User user = userRepository.findByUsername(principal.getName()).orElse(null);
+        if (user == null)
+            return ResponseEntity.status(401).body("User not found");
+        String passphrase = payload.get("passphrase");
+        if (confidentialPasskey.equals(passphrase)) {
+            user.setConfidentialUnlocked(true);
+            userRepository.save(user);
+            return ResponseEntity.ok(Map.of("success", true));
+        }
+        return ResponseEntity.status(403).body("Incorrect passkey");
     }
 
     // WebSocket Message Handling

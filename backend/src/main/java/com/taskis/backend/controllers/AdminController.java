@@ -199,7 +199,25 @@ public class AdminController {
     public ResponseEntity<?> getUsers() {
         if (!isAdmin())
             return ResponseEntity.status(403).body("Access denied");
-        return ResponseEntity.ok(userRepository.findAll());
+        // Admin-only DTO: includes the registration key (which the entity now hides
+        // via @JsonIgnore) but never the password hash.
+        java.util.List<java.util.Map<String, Object>> out = new java.util.ArrayList<>();
+        for (User u : userRepository.findAll()) {
+            java.util.Map<String, Object> m = new java.util.HashMap<>();
+            m.put("id", u.getId());
+            m.put("username", u.getUsername());
+            m.put("displayName", u.getDisplayName());
+            m.put("avatarUrl", u.getAvatarUrl());
+            m.put("role", u.getRole());
+            m.put("status", u.getStatus());
+            m.put("active", u.getActive());
+            m.put("registrationKey", u.getRegistrationKey());
+            m.put("ringColor", u.getRingColor());
+            m.put("createdAt", u.getCreatedAt());
+            m.put("lastHeartbeat", u.getLastHeartbeat());
+            out.add(m);
+        }
+        return ResponseEntity.ok(out);
     }
 
     @PostMapping("/users/{id}/active")

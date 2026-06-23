@@ -4,11 +4,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Search, Hash, MessageSquare, Bot } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { initials, toneFor, displayOf } from './Sidebar';
+import { initials, toneFor, displayOf, withFileToken } from './Sidebar';
 import { useFocusTrap } from '@/lib/useFocusTrap';
 
 const api = (p: string) => `http://${window.location.hostname}:8080${p}`;
-const mediaUrl = (u?: string) => (!u ? '' : u.startsWith('http') ? u : api(u));
+const mediaUrl = (u?: string) => (!u ? '' : withFileToken(u.startsWith('http') ? u : api(u)));
 
 function channelLabel(ch: string) {
   if (ch === 'taskis-bot') return { icon: <Bot className="w-[13px] h-[13px]" />, text: 'Taskis Bot' };
