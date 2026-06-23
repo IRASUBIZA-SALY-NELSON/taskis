@@ -106,10 +106,11 @@ public class AuthController {
 
         User user = userRepository.findByUsername(username).orElse(null);
         if (user != null && passwordEncoder.matches(passphrase, user.getPassword())) {
-            bruteForce.onSuccess(key); // valid credentials — clear the counter
             if (Boolean.FALSE.equals(user.getActive())) {
+                bruteForce.onFailure(key); // deactivated: not a successful auth — keep counting
                 return ResponseEntity.status(403).body("This account has been deactivated.");
             }
+            bruteForce.onSuccess(key); // fully authenticated — clear the counter
             return ResponseEntity.ok(generateAuthResponse(user));
         }
         bruteForce.onFailure(key);
