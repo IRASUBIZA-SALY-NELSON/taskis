@@ -14,16 +14,18 @@ export interface FeatureItem {
 }
 
 export const FEATURES: FeatureItem[] = [
-  { key: 'uploads', title: 'Multiple files & folders', desc: 'Attach many files — or a whole folder — in one message.' },
-  { key: 'preview', title: 'Preview files in-app', desc: 'Open images, PDFs, video and docs without leaving chat.' },
-  { key: 'share', title: 'Share a conversation', desc: 'Invite teammates and copy an access link.' },
-  { key: 'select', title: 'Select & bulk-delete', desc: 'Tick several messages and clear them at once.' },
-  { key: 'confidential', title: 'Unlock #confidential', desc: 'A locked channel that asks for a passkey first.' },
-  { key: 'slash', title: 'Slash commands & confetti', desc: 'Try /roll, /flip, /8ball or /celebrate 🎉' },
-  { key: 'heart', title: 'Double-tap to react', desc: 'Double-click any message to ❤️ it instantly.' },
+  { key: 'polls', title: 'Create polls', desc: 'Type /poll Question | A | B to start a vote.' },
+  { key: 'effects', title: 'Message effects', desc: 'Send with /slam, /gentle, or /spoiler tap-to-reveal.' },
+  { key: 'superreact', title: 'Super-reactions', desc: 'React 🎉 or 🔥 for a sound + confetti burst.' },
+  { key: 'accent', title: 'Pick your accent', desc: 'Recolor the whole app from Settings → Accent.' },
+  { key: 'markdown', title: 'Rich formatting', desc: 'Use > quotes, - lists, and | tables | in messages.' },
+  { key: 'recap', title: 'Daily recap & streaks', desc: 'Open the Feed for your streak and the week’s top post.' },
+  { key: 'status', title: 'Custom status', desc: 'Set “🌴 On leave” from your profile.' },
+  { key: 'dnd', title: 'Do Not Disturb', desc: 'Silence pings — with optional quiet hours — in Settings.' },
+  { key: 'favorites', title: 'Favorite channels', desc: 'Star a channel to pin it to the top.' },
 ];
 
-const KEY = 'taskis-features-v1';
+const KEY = 'taskis-features-v3';
 const EVT = 'taskis:feature';
 
 interface State { seen?: boolean; dismissed?: boolean; done?: string[] }

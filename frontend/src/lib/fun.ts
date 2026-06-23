@@ -126,9 +126,22 @@ export function runFunCommand(raw: string): FunResult {
     case '/celebrate':
     case '/party':
       return { handled: true, content: `🎉 ${arg || 'Let’s celebrate!'} 🎉`, effect: 'confetti' };
+    case '/slam':
+      return arg ? { handled: true, content: `::slam:: ${arg}` } : { handled: true, content: 'Usage: /slam your message' };
+    case '/gentle':
+      return arg ? { handled: true, content: `::gentle:: ${arg}` } : { handled: true, content: 'Usage: /gentle your message' };
+    case '/spoiler':
+      return arg ? { handled: true, content: `||${arg}||` } : { handled: true, content: 'Usage: /spoiler hidden text' };
     default:
       return { handled: false, content: raw };
   }
+}
+
+/** Pull a leading message effect marker (::slam::/::gentle::) off content. */
+export function parseEffect(content: string | null | undefined): { effect: 'slam' | 'gentle' | null; text: string } {
+  const m = (content || '').match(/^::(slam|gentle)::\s?/);
+  if (m) return { effect: m[1] as 'slam' | 'gentle', text: (content || '').slice(m[0].length) };
+  return { effect: null, text: content || '' };
 }
 
 /** Heuristic: does this message deserve a spontaneous confetti pop? */

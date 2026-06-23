@@ -1,10 +1,12 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Settings, Check } from 'lucide-react';
+import { Settings, Check, Moon } from 'lucide-react';
 import { FONT_OPTIONS, getFontId, applyFont } from '@/lib/prefs';
-import { getNotifyPrefs, setNotifyPrefs, requestNotificationPermission, notificationsEnabled } from '@/lib/notify';
+import { getNotifyPrefs, setNotifyPrefs, requestNotificationPermission, notificationsEnabled, getDnd, setDnd } from '@/lib/notify';
 import { getThemeMode, applyThemeMode, type ThemeMode } from '@/lib/theme';
+import { ACCENTS, getAccent, applyAccent } from '@/lib/accent';
+import { markFeature } from '@/lib/features';
 
 function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
   return (
@@ -25,6 +27,8 @@ export default function SettingsMenu() {
   const [prefs, setPrefs] = useState({ sound: true, desktop: true });
   const [granted, setGranted] = useState(true);
   const [theme, setTheme] = useState<ThemeMode>('light');
+  const [accent, setAccent] = useState('blue');
+  const [dnd, setDndState] = useState<{ on: boolean; from: number | null; to: number | null }>({ on: false, from: null, to: null });
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -32,7 +36,13 @@ export default function SettingsMenu() {
     setPrefs(getNotifyPrefs());
     setGranted(notificationsEnabled());
     setTheme(getThemeMode());
+    setAccent(getAccent());
+    setDndState(getDnd());
   }, [open]);
+
+  const toTime = (m: number | null) => (m == null ? '' : `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`);
+  const fromTime = (s: string): number | null => { if (!s) return null; const [h, mm] = s.split(':').map(Number); return h * 60 + mm; };
+  const updateDnd = (d: Partial<{ on: boolean; from: number | null; to: number | null }>) => { setDnd(d); setDndState((s) => ({ ...s, ...d })); markFeature('dnd'); };
 
   useEffect(() => {
     const close = (e: MouseEvent) => {
@@ -74,6 +84,24 @@ export default function SettingsMenu() {
             </div>
           </div>
 
+          <div className="px-3 pt-2 pb-1">
+            <div className="eyebrow pb-2">Accent</div>
+            <div className="flex items-center gap-2">
+              {ACCENTS.map((a) => (
+                <button
+                  key={a.id}
+                  onClick={() => { applyAccent(a.id); setAccent(a.id); markFeature('accent'); }}
+                  title={a.label}
+                  aria-label={a.label}
+                  className="w-6 h-6 rounded-full grid place-items-center transition-transform hover:scale-110"
+                  style={{ background: a.hex, boxShadow: accent === a.id ? '0 0 0 2px var(--surface-1), 0 0 0 4px var(--t2)' : 'var(--edge-hi)' }}
+                >
+                  {accent === a.id && <Check className="w-[12px] h-[12px] text-white" />}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="h-px bg-border my-1.5 mx-3" />
 
           <div className="eyebrow px-3 py-1.5">Notifications</div>
@@ -86,6 +114,18 @@ export default function SettingsMenu() {
           <div className="flex items-center justify-between px-3 py-1.5">
             <span className="text-[13.5px] text-t1">Sound</span>
             <Toggle on={prefs.sound} onClick={() => update({ sound: !prefs.sound })} />
+          </div>
+          <div className="flex items-center justify-between px-3 py-1.5">
+            <span className="flex items-center gap-1.5 text-[13.5px] text-t1"><Moon className="w-[14px] h-[14px] text-t3" />Do Not Disturb</span>
+            <Toggle on={dnd.on} onClick={() => updateDnd({ on: !dnd.on })} />
+          </div>
+          <div className="flex items-center justify-between px-3 py-1.5 gap-2">
+            <span className="text-[12.5px] text-t2 flex-none">Quiet hours</span>
+            <div className="flex items-center gap-1">
+              <input type="time" value={toTime(dnd.from)} onChange={(e) => updateDnd({ from: fromTime(e.target.value) })} className="tk-input" style={{ padding: '3px 6px', width: 84, fontSize: 12 }} />
+              <span className="text-t3 text-xs">–</span>
+              <input type="time" value={toTime(dnd.to)} onChange={(e) => updateDnd({ to: fromTime(e.target.value) })} className="tk-input" style={{ padding: '3px 6px', width: 84, fontSize: 12 }} />
+            </div>
           </div>
 
           <div className="h-px bg-border my-1.5 mx-3" />

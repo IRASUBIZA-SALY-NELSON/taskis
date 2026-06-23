@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Send, Paperclip, FileText, Download, Lock, Menu, X, AlertCircle, MessageSquare, MoreVertical, Reply, Pencil, Trash2, SmilePlus, CheckCheck, Search, Pin, Bookmark, BookmarkCheck, Mic, Square, Smile, Copy, Eye, FolderUp, KeyRound, CircleCheck, Circle, ListChecks } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { initials, toneFor, displayOf } from './Sidebar';
+import { initials, toneFor, displayOf, defaultAvatarUrl, avatarFor, ringFor } from './Sidebar';
 import { subscribe, publish } from '@/lib/ws';
 import EmojiGifPicker from './EmojiGifPicker';
 import { useToast } from './Toast';
@@ -15,13 +15,13 @@ import VoiceNote from './VoiceNote';
 import { copyToClipboard } from '@/lib/clipboard';
 import { searchEmoji } from '@/lib/emoji';
 import { useCustomEmojis } from '@/lib/customEmoji';
-import { isMuted, toggleMute, playTick } from '@/lib/notify';
+import { isMuted, toggleMute, playTick, playReaction } from '@/lib/notify';
 import { Bell, BellOff, ArrowDown, Bold, Italic, Code, Link as LinkIcon, Strikethrough, Flag } from 'lucide-react';
 import FilePreview, { PreviewAtt } from './FilePreview';
 import ShareModal from './ShareModal';
-import { Share2, Dices, Coins, PartyPopper, Sparkles, Heart } from 'lucide-react';
+import { Share2, Dices, Coins, PartyPopper, Sparkles, Heart, AtSign, Zap } from 'lucide-react';
 import { plainText } from '@/lib/rich';
-import { confetti, emojiRain, runFunCommand, deservesConfetti, watchKonami } from '@/lib/fun';
+import { confetti, emojiRain, runFunCommand, deservesConfetti, watchKonami, parseEffect } from '@/lib/fun';
 import { markFeature } from '@/lib/features';
 
 interface ChatAreaProps { user: any; channel: string; onToggleSidebar: () => void; }
@@ -46,6 +46,8 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [showShare, setShowShare] = useState(false);
+  const [topic, setTopic] = useState('');
+  const [editingTopic, setEditingTopic] = useState(false);
   const [confidUnlocked, setConfidUnlocked] = useState(true);
   const [passInput, setPassInput] = useState('');
   const [passErr, setPassErr] = useState(false);
@@ -142,6 +144,18 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     } else {
       setPassErr(true);
     }
+  };
+
+  // Channel topic (kept locally per channel for now).
+  useEffect(() => {
+    setEditingTopic(false);
+    try { setTopic(localStorage.getItem(`taskis-topic-${channel}`) || ''); } catch { setTopic(''); }
+  }, [channel]);
+  const saveTopic = (v: string) => {
+    const t = v.trim();
+    setTopic(t);
+    setEditingTopic(false);
+    try { if (t) localStorage.setItem(`taskis-topic-${channel}`, t); else localStorage.removeItem(`taskis-topic-${channel}`); } catch { /* noop */ }
   };
 
   // Konami code → it rains confetti. Pure silliness.
@@ -450,14 +464,40 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     return raw;
   };
 
+  // ---- polls (stored as a marker message; votes ride the existing reactions) ----
+  const POLL_TOKENS = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
+  const makePoll = (raw: string): string | null => {
+    const m = raw.trim().match(/^\/poll\s+(.+)$/i);
+    if (!m) return null;
+    const parts = m[1].split('|').map((s) => s.trim()).filter(Boolean);
+    if (parts.length < 3) return null; // need a question + at least two options
+    const [q, ...options] = parts;
+    return `::poll::${JSON.stringify({ q, options: options.slice(0, 10) })}`;
+  };
+  const reactRaw = (id: number, emoji: string) =>
+    fetch(api(`/api/chat/messages/${id}/react`), { method: 'POST', headers: authH(), body: JSON.stringify({ emoji }) });
+  const votePoll = async (msg: any, token: string, tokens: string[]) => {
+    markFeature('polls');
+    const rx = parseRx(msg.reactions);
+    // single-choice: clear any other option I picked, then toggle the target
+    for (const t of tokens) {
+      if (t !== token && (rx[t] || []).includes(user.username)) await reactRaw(msg.id, t);
+    }
+    await reactRaw(msg.id, token);
+    fetchMsgs();
+  };
+
   const send = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() && files.length === 0) return;
 
-    // Silly slash commands (/roll, /flip, /8ball, /celebrate) take priority.
+    // Poll syntax wins; otherwise silly slash commands (/roll, /flip, …).
+    const poll = makePoll(input);
     const fun = runFunCommand(input);
-    const text = fun.handled ? (fun.content ?? '') : applySlash(input);
+    const text = poll ?? (fun.handled ? (fun.content ?? '') : applySlash(input));
+    if (poll) markFeature('polls');
     if (fun.handled) markFeature('slash');
+    if (/^::(slam|gentle)::/.test(text) || /\|\|[^|]+\|\|/.test(text)) markFeature('effects');
     if (fun.effect === 'confetti') confetti();
     const replySnapshot = replyTo;
 
@@ -515,6 +555,8 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
 
   const react = async (msgId: number, emoji: string) => {
     setEmojiId(null);
+    playReaction(emoji);
+    if (emoji === '🎉' || emoji === '🎊' || emoji === '🔥') { confetti(60); markFeature('superreact'); } // super-reaction burst
     await fetch(api(`/api/chat/messages/${msgId}/react`), { method: 'POST', headers: authH(), body: JSON.stringify({ emoji }) });
     fetchMsgs();
   };
@@ -639,6 +681,10 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     { cmd: '/flip', icon: Coins, desc: 'Flip a coin' },
     { cmd: '/8ball', icon: Sparkles, desc: 'Ask the magic 8-ball a question' },
     { cmd: '/celebrate', icon: PartyPopper, desc: 'Throw confetti 🎉' },
+    { cmd: '/poll', icon: ListChecks, desc: 'Create a poll — /poll Lunch? | Pizza | Sushi' },
+    { cmd: '/slam', icon: Zap, desc: 'Send with a slam effect' },
+    { cmd: '/gentle', icon: Sparkles, desc: 'Send with a gentle effect' },
+    { cmd: '/spoiler', icon: Eye, desc: 'Hide text behind tap-to-reveal' },
     { cmd: '/shrug', icon: Smile, desc: '¯\\_(ツ)_/¯' },
     { cmd: '/tableflip', icon: Smile, desc: '(╯°□°)╯︵ ┻━┻' },
     { cmd: '/unflip', icon: Smile, desc: '┬─┬ ノ( ゜-゜ノ)' },
@@ -653,7 +699,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
 
   const pickSlash = (cmd: string) => {
     markFeature('slash');
-    const needsArg = cmd === '/8ball' || cmd === '/roll';
+    const needsArg = ['/8ball', '/roll', '/poll', '/slam', '/gentle', '/spoiler'].includes(cmd);
     const next = needsArg ? `${cmd} ` : cmd;
     setInput(next);
     setSlashQuery(null);
@@ -761,7 +807,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     setTimeout(() => { ta.focus(); ta.setSelectionRange(urlStart, urlStart + 3); autoGrow(); }, 0);
   };
 
-  const fmtBtn = 'w-7 h-7 grid place-items-center rounded-md text-t3 hover:text-t1 hover:bg-hover transition-colors';
+  const fmtBtn = 'w-[26px] h-[26px] grid place-items-center rounded-[8px] text-t2 hover:text-t1 hover:bg-hover active:scale-95 transition-all';
 
   const autoGrow = () => {
     const ta = taRef.current;
@@ -849,9 +895,17 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
       ? `${typingUsers[0]} and ${typingUsers[1]} are typing…`
       : 'Several people are typing…';
 
-  const mentionMatches = mentionQuery === null ? [] : members
-    .filter((m) => m.username && m.username !== 'Taskis Bot' && m.username.toLowerCase().startsWith(mentionQuery.toLowerCase()))
-    .slice(0, 6);
+  // Special broadcast mentions — only inside real channels (not DMs/bot).
+  const SPECIAL_MENTIONS = isChannel
+    ? [
+        { username: 'channel', special: true, sub: 'Notify everyone in this channel' },
+        { username: 'here', special: true, sub: 'Notify people who are active' },
+      ]
+    : [];
+  const mentionMatches: any[] = mentionQuery === null ? [] : [
+    ...SPECIAL_MENTIONS.filter((s) => s.username.startsWith(mentionQuery.toLowerCase())),
+    ...members.filter((m) => m.username && m.username !== 'Taskis Bot' && m.username.toLowerCase().startsWith(mentionQuery.toLowerCase())),
+  ].slice(0, 6);
 
   const emojiMatches: { custom: boolean; e?: string; name?: string; url?: string }[] = colonQuery === null ? [] : [
     ...Object.keys(customMap).filter((n) => n.includes(colonQuery.toLowerCase())).slice(0, 5).map((n) => ({ custom: true, name: n, url: customMap[n] })),
@@ -932,7 +986,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   const actionBtnCls = 'w-[26px] h-[26px] grid place-items-center rounded-lg bg-surface-2 border border-border text-t2 hover:text-t1 hover:border-border-strong transition-colors cursor-pointer';
 
   const ThreadRow = ({ m }: { m: any }) => {
-    const src = m.sender?.avatarUrl ? (m.sender.avatarUrl.startsWith('http') ? m.sender.avatarUrl : api(m.sender.avatarUrl)) : null;
+    const src = m.sender?.avatarUrl ? (m.sender.avatarUrl.startsWith('http') ? m.sender.avatarUrl : api(m.sender.avatarUrl)) : defaultAvatarUrl(m.sender?.username || '?');
     const me = m.sender?.username === user.username;
     return (
       <div className="flex gap-2.5">
@@ -1007,14 +1061,32 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
         {isChannel && <span className="text-[22px] font-medium text-t3 leading-none">#</span>}
         {isBot && <span className="w-[30px] h-[30px] rounded-lg bg-accent-soft text-accent-text text-[13px] font-bold grid place-items-center flex-none">TB</span>}
         {isDm && (
-          <span className="relative w-[30px] h-[30px] rounded-full grid place-items-center flex-none text-xs font-semibold text-white overflow-hidden" style={{ background: dmPartner?.avatarUrl ? 'transparent' : toneFor(dmPartner?.username || channel) }}>
-            {dmPartner?.avatarUrl ? <img src={dmPartner.avatarUrl.startsWith('http') ? dmPartner.avatarUrl : api(dmPartner.avatarUrl)} alt="" className="absolute inset-0 w-full h-full object-cover" /> : initials(headerTitle)}
+          <span className="relative w-[30px] h-[30px] rounded-full grid place-items-center flex-none text-xs font-semibold text-white overflow-hidden" style={{ background: dmPartner ? 'transparent' : toneFor(dmPartner?.username || channel) }}>
+            {dmPartner ? <img src={avatarFor(dmPartner)} alt="" className="absolute inset-0 w-full h-full object-cover" /> : initials(headerTitle)}
             {dmPartner && <span className="absolute -right-px -bottom-px w-2.5 h-2.5 rounded-full z-10" style={{ background: dmPartner.status === 'ACTIVE' ? 'var(--online)' : dmPartner.status === 'AWAY' ? 'var(--away)' : 'var(--t3)', border: '2px solid var(--bg)' }} />}
           </span>
         )}
         <div className="flex-1 min-w-0">
           <div className="text-[15.5px] font-semibold text-t1 leading-tight truncate">{headerTitle}</div>
-          <div className="flex items-center gap-1.5 text-xs text-t2 mt-px"><Lock className="w-[11px] h-[11px]" />{headerSub}</div>
+          {isChannel ? (
+            editingTopic ? (
+              <input
+                autoFocus
+                defaultValue={topic}
+                onBlur={(e) => saveTopic(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') saveTopic((e.target as HTMLInputElement).value); if (e.key === 'Escape') setEditingTopic(false); }}
+                placeholder="Add a topic…"
+                className="bg-transparent border-0 outline-none text-xs text-t2 w-full mt-px"
+              />
+            ) : (
+              <button onClick={() => setEditingTopic(true)} className="group flex items-center gap-1.5 text-xs text-t2 hover:text-t1 transition-colors mt-px max-w-full" title="Set channel topic">
+                <span className="truncate">{topic || <span className="text-t3">Add a topic…</span>}</span>
+                <Pencil className="w-[10px] h-[10px] flex-none opacity-0 group-hover:opacity-100 transition-opacity" />
+              </button>
+            )
+          ) : (
+            <div className="flex items-center gap-1.5 text-xs text-t2 mt-px"><Lock className="w-[11px] h-[11px]" />{headerSub}</div>
+          )}
         </div>
 
         <div className="flex items-center gap-1.5 flex-none">
@@ -1125,7 +1197,8 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
             const canEdit = isMe && !isDeleted && !readByOthers(msg);
             const selectable = canDelete(msg);
             const isSelected = typeof msg.id === 'number' && selected.has(msg.id);
-            const src = msg.sender?.avatarUrl ? (msg.sender.avatarUrl.startsWith('http') ? msg.sender.avatarUrl : api(msg.sender.avatarUrl)) : null;
+            const isPoll = !isDeleted && typeof msg.content === 'string' && msg.content.startsWith('::poll::');
+            const src = msg.sender?.avatarUrl ? (msg.sender.avatarUrl.startsWith('http') ? msg.sender.avatarUrl : api(msg.sender.avatarUrl)) : defaultAvatarUrl(msg.sender?.username || '?');
 
             return (
               <React.Fragment key={msg.id || idx}>
@@ -1167,7 +1240,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                     grouped ? (
                       <span className="w-7 flex-none" />
                     ) : (
-                      <span className="relative overflow-hidden w-7 h-7 rounded-full grid place-items-center flex-none text-[11px] font-semibold text-white mt-5" style={{ background: src ? 'transparent' : toneFor(msg.sender?.username || '?') }}>
+                      <span className="relative overflow-hidden w-7 h-7 rounded-full grid place-items-center flex-none text-[11px] font-semibold text-white mt-5" style={{ background: src ? 'transparent' : toneFor(msg.sender?.username || '?'), boxShadow: ringFor(msg.sender) }} title={msg.sender?.role === 'ADMIN' ? 'Admin' : undefined}>
                         {src ? <img src={src} alt="" className="absolute inset-0 w-full h-full object-cover" /> : initials(msg.sender?.username || '?')}
                       </span>
                     )
@@ -1211,14 +1284,44 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                             <Heart className="w-7 h-7 text-danger drop-shadow" fill="currentColor" />
                           </motion.span>
                         )}
-                        {(msg.content || isDeleted) && (
+                        {isPoll ? (() => {
+                          let data: { q: string; options: string[] } | null = null;
+                          try { data = JSON.parse(msg.content.slice(8)); } catch { /* noop */ }
+                          if (!data) return null;
+                          const rx = parseRx(msg.reactions);
+                          const tokens = data.options.map((_, i) => POLL_TOKENS[i]);
+                          const counts = tokens.map((t) => (rx[t] || []).length);
+                          const total = counts.reduce((a, b) => a + b, 0);
+                          return (
+                            <div className="w-[300px] max-w-full rounded-2xl border border-border p-3.5" style={{ background: 'var(--surface-2)' }}>
+                              <div className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-t3 mb-1.5"><Sparkles className="w-[12px] h-[12px]" />Poll</div>
+                              <div className="text-[14px] font-semibold text-t1 mb-2.5 break-words">{data.q}</div>
+                              <div className="space-y-1.5">
+                                {data.options.map((opt, i) => {
+                                  const c = counts[i]; const pct = total ? Math.round((c / total) * 100) : 0;
+                                  const picked = (rx[tokens[i]] || []).includes(user.username);
+                                  return (
+                                    <button key={i} onClick={() => votePoll(msg, tokens[i], tokens)} className="relative w-full text-left rounded-xl border overflow-hidden transition-colors" style={{ borderColor: picked ? 'var(--accent-line)' : 'var(--border)' }}>
+                                      <span className="absolute inset-y-0 left-0 transition-[width] duration-500" style={{ width: `${pct}%`, background: 'var(--accent-soft)' }} />
+                                      <span className="relative flex items-center justify-between gap-2 px-3 py-2 text-[13px] text-t1">
+                                        <span className="flex items-center gap-2 min-w-0"><span className="flex-none">{tokens[i]}</span><span className="truncate">{opt}</span>{picked && <CheckCheck className="w-[13px] h-[13px] flex-none" style={{ color: 'var(--accent-text)' }} />}</span>
+                                        <span className="text-t3 tabular-nums flex-none">{pct}%</span>
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              <div className="text-[11px] text-t3 mt-2.5">{total} vote{total === 1 ? '' : 's'} · single choice</div>
+                            </div>
+                          );
+                        })() : (() => { const fx = isDeleted ? { effect: null, text: msg.content } : parseEffect(msg.content); return (msg.content || isDeleted) && (
                           <div
-                            className={`px-[14px] py-[9px] text-[14.5px] leading-relaxed whitespace-pre-wrap break-words ${isDeleted ? 'opacity-50 italic' : ''}`}
+                            className={`px-[14px] py-[9px] text-[14.5px] leading-relaxed whitespace-pre-wrap break-words ${isDeleted ? 'opacity-50 italic' : ''} ${fx.effect === 'slam' ? 'tk-fx-slam' : fx.effect === 'gentle' ? 'tk-fx-gentle' : ''}`}
                             style={{ background: isMe ? 'var(--bubble-own)' : 'var(--bubble-other)', color: isMe ? 'var(--bubble-own-text)' : 'var(--bubble-other-text)', borderRadius: isMe ? '20px 7px 20px 20px' : '7px 20px 20px 20px' }}
                           >
-                            {msg.content ? (isDeleted ? msg.content : (searchActive ? highlight(msg.content, search.trim()) : renderContent(msg.content))) : msg.content}
+                            {msg.content ? (isDeleted ? msg.content : (searchActive ? highlight(fx.text, search.trim()) : renderContent(fx.text))) : msg.content}
                           </div>
-                        )}
+                        ); })()}
                         {!isDeleted && !msg.attachmentUrl && firstUrl(msg.content) && <LinkPreview url={firstUrl(msg.content)!} />}
                         {!isDeleted && <Attachment msg={msg} mine={isMe} />}
                       </div>
@@ -1268,7 +1371,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                     </div>
 
                     {/* reactions */}
-                    {Object.keys(rx).length > 0 && (
+                    {!isPoll && Object.keys(rx).length > 0 && (
                       <div className={`flex flex-wrap gap-1 mt-1.5 ${isMe ? 'justify-end' : 'justify-start'}`}>
                         {Object.entries(rx).map(([em, users]) => {
                           const mineRx = users.includes(user.username);
@@ -1292,7 +1395,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                         <button onClick={() => setThreadRoot(msg)} className={`flex items-center gap-2 mt-1.5 pl-1 pr-3 py-1 rounded-full hover:bg-hover transition-colors ${isMe ? 'self-end' : 'self-start'}`}>
                           <span className="flex -space-x-1.5">
                             {parts.slice(0, 3).map((p, pi) => {
-                              const psrc = p?.avatarUrl ? (p.avatarUrl.startsWith('http') ? p.avatarUrl : api(p.avatarUrl)) : null;
+                              const psrc = p?.avatarUrl ? (p.avatarUrl.startsWith('http') ? p.avatarUrl : api(p.avatarUrl)) : defaultAvatarUrl(p?.username || '?');
                               return (
                                 <span key={pi} className="relative w-[18px] h-[18px] rounded-full grid place-items-center text-[9px] font-semibold text-white overflow-hidden" style={{ background: psrc ? 'transparent' : toneFor(p?.username || '?'), border: '1.5px solid var(--surface-1)' }}>
                                   {psrc ? <img src={psrc} alt="" className="absolute inset-0 w-full h-full object-cover" /> : initials(p?.username || '?')}
@@ -1347,18 +1450,6 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
         >
           <ArrowDown className="w-[16px] h-[16px]" />
         </button>
-      )}
-
-      {/* typing indicator */}
-      {!isBot && typingUsers.length > 0 && (
-        <div className="px-[22px] h-5 flex items-center gap-2 text-[12px] text-t3">
-          <span className="flex items-center gap-0.5">
-            <span className="w-1 h-1 rounded-full bg-t3" style={{ animation: 'tk-dot 1.2s infinite' }} />
-            <span className="w-1 h-1 rounded-full bg-t3" style={{ animation: 'tk-dot 1.2s infinite 0.2s' }} />
-            <span className="w-1 h-1 rounded-full bg-t3" style={{ animation: 'tk-dot 1.2s infinite 0.4s' }} />
-          </span>
-          {typingText}
-        </div>
       )}
 
       {/* jump to latest */}
@@ -1461,12 +1552,16 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                   </div>
                 </div>
               )}
-              <div className="flex items-center gap-0.5 px-1.5 pb-1.5">
-                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => wrapSelection('**')} className={fmtBtn} title="Bold (⌘B)"><Bold className="w-[14px] h-[14px]" /></button>
-                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => wrapSelection('_')} className={fmtBtn} title="Italic (⌘I)"><Italic className="w-[14px] h-[14px]" /></button>
-                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => wrapSelection('~~')} className={fmtBtn} title="Strikethrough"><Strikethrough className="w-[14px] h-[14px]" /></button>
-                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => wrapSelection('`')} className={fmtBtn} title="Code (⌘E)"><Code className="w-[14px] h-[14px]" /></button>
-                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={insertLink} className={fmtBtn} title="Link"><LinkIcon className="w-[14px] h-[14px]" /></button>
+              <div className="flex items-center gap-2 px-1 pb-2">
+                <div className="inline-flex items-center gap-0.5 rounded-[12px] border border-border bg-surface-2 p-1">
+                  <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => wrapSelection('**')} className={fmtBtn} title="Bold (⌘B)"><Bold className="w-[14px] h-[14px]" /></button>
+                  <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => wrapSelection('_')} className={fmtBtn} title="Italic (⌘I)"><Italic className="w-[14px] h-[14px]" /></button>
+                  <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => wrapSelection('~~')} className={fmtBtn} title="Strikethrough"><Strikethrough className="w-[14px] h-[14px]" /></button>
+                  <span className="w-px h-4 bg-border mx-0.5" />
+                  <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => wrapSelection('`')} className={fmtBtn} title="Code (⌘E)"><Code className="w-[14px] h-[14px]" /></button>
+                  <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={insertLink} className={fmtBtn} title="Link"><LinkIcon className="w-[14px] h-[14px]" /></button>
+                </div>
+                <span className="text-[11px] text-t3 hidden sm:block">Select text, then format · or type <span className="tk-icode">/</span> for commands</span>
               </div>
               <form onSubmit={send} className="relative flex items-end gap-1.5 rounded-[22px] border border-border-strong bg-surface-2 p-1.5">
                 {slashQuery !== null && slashMatches.length > 0 && (
@@ -1502,7 +1597,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                   </div>
                 )}
                 {mentionQuery !== null && mentionMatches.length > 0 && (
-                  <div className="card absolute bottom-full mb-2 left-0 w-[240px] py-1 z-50" style={{ boxShadow: 'var(--shadow-lg), var(--edge-hi)' }}>
+                  <div className="card tk-pop absolute bottom-full mb-2 left-0 w-[260px] py-1 z-50" style={{ boxShadow: 'var(--shadow-lg)' }}>
                     {mentionMatches.map((m, i) => (
                       <button
                         type="button"
@@ -1511,8 +1606,15 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                         onMouseEnter={() => setMentionSel(i)}
                         className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-left transition-colors ${i === mentionSel ? 'bg-hover' : ''}`}
                       >
-                        <span className="w-6 h-6 rounded-full grid place-items-center flex-none text-[10px] font-semibold text-white" style={{ background: toneFor(m.username) }}>{initials(m.username)}</span>
-                        <span className="text-[13px] text-t1">{m.username}</span>
+                        {m.special ? (
+                          <span className="w-7 h-7 rounded-full grid place-items-center flex-none text-on-accent" style={{ background: 'var(--accent)' }}><AtSign className="w-[14px] h-[14px]" /></span>
+                        ) : (
+                          <span className="w-7 h-7 rounded-full grid place-items-center flex-none text-[10px] font-semibold text-white overflow-hidden" style={{ background: toneFor(m.username) }}>{initials(m.username)}</span>
+                        )}
+                        <span className="min-w-0">
+                          <span className="block text-[13px] font-medium text-t1">@{m.username}</span>
+                          {m.special && <span className="block text-[11px] text-t3 truncate">{m.sub}</span>}
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -1544,6 +1646,18 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                 </button>
               </form>
             </>
+          )}
+
+          {/* typing — sits under the message box */}
+          {typingUsers.length > 0 && (
+            <div className="flex items-center gap-2 pt-0.5 text-[12px] text-t3 h-4">
+              <span className="flex items-center gap-0.5">
+                <span className="w-1 h-1 rounded-full bg-t3" style={{ animation: 'tk-dot 1.2s infinite' }} />
+                <span className="w-1 h-1 rounded-full bg-t3" style={{ animation: 'tk-dot 1.2s infinite 0.2s' }} />
+                <span className="w-1 h-1 rounded-full bg-t3" style={{ animation: 'tk-dot 1.2s infinite 0.4s' }} />
+              </span>
+              {typingText}
+            </div>
           )}
         </div>
       )}

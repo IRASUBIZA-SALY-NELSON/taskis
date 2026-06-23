@@ -3,7 +3,8 @@
 import React, { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Camera } from 'lucide-react';
-import { initials, toneFor } from './Sidebar';
+import { initials, toneFor, defaultAvatarUrl } from './Sidebar';
+import { markFeature } from '@/lib/features';
 import { useFocusTrap } from '@/lib/useFocusTrap';
 
 interface Props {
@@ -15,6 +16,7 @@ export default function ProfileModal({ user, onClose }: Props) {
   const api = (p: string) => `http://${window.location.hostname}:8080${p}`;
   const [displayName, setDisplayName] = useState(user.displayName || '');
   const [bio, setBio] = useState(user.bio || '');
+  const [customStatus, setCustomStatus] = useState(user.customStatus || '');
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -23,7 +25,7 @@ export default function ProfileModal({ user, onClose }: Props) {
   useFocusTrap(true, cardRef);
 
   const token = () => localStorage.getItem('token');
-  const currentAvatar = user.avatarUrl ? (user.avatarUrl.startsWith('http') ? user.avatarUrl : api(user.avatarUrl)) : null;
+  const currentAvatar = user.avatarUrl ? (user.avatarUrl.startsWith('http') ? user.avatarUrl : api(user.avatarUrl)) : defaultAvatarUrl(user.username);
 
   const pickAvatar = (f: File | null) => {
     if (avatarPreview) URL.revokeObjectURL(avatarPreview);
@@ -46,10 +48,11 @@ export default function ProfileModal({ user, onClose }: Props) {
       const res = await fetch(api('/api/chat/profile'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
-        body: JSON.stringify({ displayName, bio }),
+        body: JSON.stringify({ displayName, bio, customStatus }),
       });
       if (res.ok) {
         const updated = await res.json();
+        if (customStatus.trim()) markFeature('status');
         localStorage.setItem('user', JSON.stringify(updated));
         window.location.reload();
         return;
@@ -79,6 +82,9 @@ export default function ProfileModal({ user, onClose }: Props) {
             <div className="text-[12.5px] text-t3">@{user.username}</div>
           </div>
         </div>
+
+        <label className="eyebrow block mb-1.5">Status</label>
+        <input value={customStatus} onChange={(e) => setCustomStatus(e.target.value)} placeholder="🌴 On leave" className="tk-input mb-4" maxLength={80} />
 
         <label className="eyebrow block mb-1.5">Display name</label>
         <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder={user.username} className="tk-input mb-4" maxLength={40} />

@@ -12,6 +12,7 @@ import ShortcutsHelp from '@/components/ShortcutsHelp';
 import GlobalSearch from '@/components/GlobalSearch';
 import FeaturesPanel from '@/components/FeaturesPanel';
 import { initThemeWatcher } from '@/lib/theme';
+import { initAccent } from '@/lib/accent';
 
 export default function AppShell({ initialChannel = 'general' }: { initialChannel?: string }) {
   const router = useRouter();
@@ -27,7 +28,7 @@ export default function AppShell({ initialChannel = 'general' }: { initialChanne
     setIsSidebarOpen(window.innerWidth >= 1024);
   }, [router]);
 
-  useEffect(() => initThemeWatcher(), []);
+  useEffect(() => { initAccent(); return initThemeWatcher(); }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -52,8 +53,8 @@ export default function AppShell({ initialChannel = 'general' }: { initialChanne
       <CommandPalette user={user} onNavigate={setActiveChannel} />
       <GlobalSearch onNavigate={setActiveChannel} />
       <ShortcutsHelp />
-      <div className="h-screen w-full overflow-hidden p-0 sm:p-3 lg:p-5 xl:p-6">
-        <div className="app-frame flex h-full w-full overflow-hidden">
+      <div className="h-screen w-full overflow-hidden">
+        <div className="flex h-full w-full overflow-hidden bg-surface">
           <Sidebar
             user={user}
             activeChannel={activeChannel}

@@ -48,6 +48,10 @@ public class User {
     @Column(length = 512)
     private String bio;
 
+    // Free-form custom status, e.g. "🌴 On leave" — visible to teammates.
+    @Column(length = 120)
+    private String customStatus;
+
     @Temporal(TemporalType.TIMESTAMP)
     private Date lastHeartbeat;
 

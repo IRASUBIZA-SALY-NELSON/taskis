@@ -44,6 +44,24 @@ export default function FilePreview({ att, onClose }: { att: PreviewAtt | null; 
     }
   }, [att, kind]);
 
+  // PDFs: fetch as a blob and render from the app origin. This sidesteps the
+  // file endpoint's restrictive CSP (which blanks the built-in PDF viewer) and
+  // avoids a scriptable cross-origin frame.
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfErr, setPdfErr] = useState(false);
+  useEffect(() => {
+    let revoked: string | null = null;
+    setPdfUrl(null);
+    setPdfErr(false);
+    if (att && kind === 'pdf') {
+      fetch(att.url)
+        .then((r) => (r.ok ? r.blob() : Promise.reject()))
+        .then((b) => { const u = URL.createObjectURL(b); revoked = u; setPdfUrl(u); })
+        .catch(() => setPdfErr(true));
+    }
+    return () => { if (revoked) URL.revokeObjectURL(revoked); };
+  }, [att, kind]);
+
   if (typeof document === 'undefined') return null;
 
   const dl = att ? (att.url.includes('/api/files/') ? `${att.url}?dl=1` : att.url) : '#';
@@ -85,7 +103,17 @@ export default function FilePreview({ att, onClose }: { att: PreviewAtt | null; 
             {kind === 'audio' && (
               <div className="w-full max-w-md px-6"><audio src={att.url} controls autoPlay className="w-full" /></div>
             )}
-            {kind === 'pdf' && <iframe src={att.url} title={att.name} className="w-full h-full bg-white" />}
+            {kind === 'pdf' && (
+              pdfErr ? (
+                <div className="h-full grid place-items-center text-t3 text-sm">Couldn’t load preview.</div>
+              ) : !pdfUrl ? (
+                <div className="h-full grid place-items-center text-t3 text-sm">Loading…</div>
+              ) : (
+                <object data={pdfUrl} type="application/pdf" className="w-full h-full bg-white">
+                  <div className="h-full grid place-items-center text-t3 text-sm px-6 text-center">Your browser can’t display this PDF inline. Use Download above.</div>
+                </object>
+              )
+            )}
             {kind === 'text' && (
               <div className="w-full h-full overflow-auto scroll">
                 {textErr ? (
