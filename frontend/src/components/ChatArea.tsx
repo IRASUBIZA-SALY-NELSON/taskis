@@ -19,6 +19,7 @@ import { isMuted, toggleMute, playTick, playReaction } from '@/lib/notify';
 import { Bell, BellOff, ArrowDown, Bold, Italic, Code, Link as LinkIcon, Strikethrough, Flag } from 'lucide-react';
 import FilePreview, { PreviewAtt } from './FilePreview';
 import ShareModal from './ShareModal';
+import PollComposer from './PollComposer';
 import { Share2, Dices, Coins, PartyPopper, Sparkles, Heart, AtSign, Zap } from 'lucide-react';
 import { plainText } from '@/lib/rich';
 import { confetti, emojiRain, runFunCommand, deservesConfetti, watchKonami, parseEffect } from '@/lib/fun';
@@ -46,6 +47,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [showShare, setShowShare] = useState(false);
+  const [showPollComposer, setShowPollComposer] = useState(false);
   const [topic, setTopic] = useState('');
   const [editingTopic, setEditingTopic] = useState(false);
   const [confidUnlocked, setConfidUnlocked] = useState(true);
@@ -102,13 +104,14 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
 
   const isBot = channel === 'taskis-bot';
   const isDm = channel.startsWith('dm_');
+  const isSelfNotes = channel === `dm_${user.id}_${user.id}`;
   const isChannel = !isBot && !isDm;
-  const dmPartner = isDm
+  const dmPartner = isDm && !isSelfNotes
     ? (() => { const ids = channel.split('_').slice(1).map(Number); const pid = ids.find((id) => id !== user.id); return members.find((m) => m.id === pid) || null; })()
     : null;
   const dmPresence = dmPartner?.status === 'ACTIVE' ? 'Active now' : dmPartner?.status === 'AWAY' ? 'Away' : 'Offline';
-  const headerTitle = isBot ? 'Taskis Bot' : isDm ? (dmPartner ? displayOf(dmPartner) : 'Direct message') : channel;
-  const headerSub = isBot ? 'Automated · read-only' : isDm && dmPartner ? dmPresence : 'End-to-end encrypted';
+  const headerTitle = isBot ? 'Taskis Bot' : isSelfNotes ? 'Notes' : isDm ? (dmPartner ? displayOf(dmPartner) : 'Direct message') : channel;
+  const headerSub = isBot ? 'Automated · read-only' : isSelfNotes ? 'Your private space — only you can see this' : isDm && dmPartner ? dmPresence : 'End-to-end encrypted';
 
   const fetchMsgs = () =>
     fetch(api(`/api/chat/messages/${channel}`), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
@@ -145,6 +148,8 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
       setPassErr(true);
     }
   };
+
+  useEffect(() => { if (isSelfNotes) markFeature('notes'); }, [isSelfNotes]);
 
   // Channel topic (kept locally per channel for now).
   useEffect(() => {
@@ -473,6 +478,16 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     if (parts.length < 3) return null; // need a question + at least two options
     const [q, ...options] = parts;
     return `::poll::${JSON.stringify({ q, options: options.slice(0, 10) })}`;
+  };
+  const submitPoll = async (q: string, options: string[]) => {
+    setShowPollComposer(false);
+    markFeature('polls');
+    const content = `::poll::${JSON.stringify({ q, options: options.slice(0, 10) })}`;
+    const replySnapshot = replyTo;
+    setReplyTo(null);
+    nearBottomRef.current = true;
+    await fetch(api('/api/chat/send'), { method: 'POST', headers: authH(), body: JSON.stringify({ content, channel, replyToId: replySnapshot?.id ?? null }) });
+    fetchMsgs();
   };
   const reactRaw = (id: number, emoji: string) =>
     fetch(api(`/api/chat/messages/${id}/react`), { method: 'POST', headers: authH(), body: JSON.stringify({ emoji }) });
@@ -1299,19 +1314,30 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                               <div className="space-y-1.5">
                                 {data.options.map((opt, i) => {
                                   const c = counts[i]; const pct = total ? Math.round((c / total) * 100) : 0;
-                                  const picked = (rx[tokens[i]] || []).includes(user.username);
+                                  const voters = rx[tokens[i]] || [];
+                                  const picked = voters.includes(user.username);
                                   return (
-                                    <button key={i} onClick={() => votePoll(msg, tokens[i], tokens)} className="relative w-full text-left rounded-xl border overflow-hidden transition-colors" style={{ borderColor: picked ? 'var(--accent-line)' : 'var(--border)' }}>
+                                    <button key={i} onClick={() => votePoll(msg, tokens[i], tokens)} className="relative w-full text-left rounded-xl border overflow-hidden transition-colors hover:border-border-strong" style={{ borderColor: picked ? 'var(--accent-line)' : 'var(--border)' }}>
                                       <span className="absolute inset-y-0 left-0 transition-[width] duration-500" style={{ width: `${pct}%`, background: 'var(--accent-soft)' }} />
                                       <span className="relative flex items-center justify-between gap-2 px-3 py-2 text-[13px] text-t1">
-                                        <span className="flex items-center gap-2 min-w-0"><span className="flex-none">{tokens[i]}</span><span className="truncate">{opt}</span>{picked && <CheckCheck className="w-[13px] h-[13px] flex-none" style={{ color: 'var(--accent-text)' }} />}</span>
-                                        <span className="text-t3 tabular-nums flex-none">{pct}%</span>
+                                        <span className="flex items-center gap-2 min-w-0"><span className="truncate">{opt}</span>{picked && <CheckCheck className="w-[13px] h-[13px] flex-none" style={{ color: 'var(--accent-text)' }} />}</span>
+                                        <span className="flex items-center gap-2 flex-none">
+                                          {voters.length > 0 && (
+                                            <span className="flex -space-x-1.5">
+                                              {voters.slice(0, 3).map((vu) => {
+                                                const vm = members.find((m) => m.username === vu) || { username: vu };
+                                                return <span key={vu} className="relative w-[18px] h-[18px] rounded-full overflow-hidden grid place-items-center text-[8px] font-semibold text-white" style={{ background: toneFor(vu), border: '1.5px solid var(--surface-2)' }} title={displayOf(vm)}><img src={avatarFor(vm)} alt="" className="absolute inset-0 w-full h-full object-cover" /></span>;
+                                              })}
+                                            </span>
+                                          )}
+                                          <span className="text-t3 tabular-nums">{pct}%</span>
+                                        </span>
                                       </span>
                                     </button>
                                   );
                                 })}
                               </div>
-                              <div className="text-[11px] text-t3 mt-2.5">{total} vote{total === 1 ? '' : 's'} · single choice</div>
+                              <div className="text-[11px] text-t3 mt-2.5">{total} vote{total === 1 ? '' : 's'} · tap to vote, tap again to remove</div>
                             </div>
                           );
                         })() : (() => { const fx = isDeleted ? { effect: null, text: msg.content } : parseEffect(msg.content); return (msg.content || isDeleted) && (
@@ -1634,6 +1660,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                   />
                 </label>
                 <button type="button" onClick={startRec} className="icon-btn w-[34px] h-[34px] border-0" title="Record voice note"><Mic className="w-[18px] h-[18px]" /></button>
+                <button type="button" onClick={() => setShowPollComposer(true)} className="icon-btn w-[34px] h-[34px] border-0" title="Create a poll"><ListChecks className="w-[18px] h-[18px]" /></button>
                 <div className="relative" data-menu>
                   <button type="button" onClick={(e) => { e.stopPropagation(); setShowComposerPicker((s) => !s); }} className="icon-btn w-[34px] h-[34px] border-0" title="Emoji & GIFs"><Smile className="w-[18px] h-[18px]" /></button>
                   {showComposerPicker && (
@@ -1743,6 +1770,9 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
 
       {/* share */}
       {showShare && <ShareModal user={user} channel={channel} title={isChannel ? `#${channel}` : headerTitle} members={members} onClose={() => setShowShare(false)} />}
+
+      {/* poll builder */}
+      {showPollComposer && <PollComposer onSubmit={submitPoll} onClose={() => setShowPollComposer(false)} />}
     </div>
   );
 }

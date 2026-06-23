@@ -52,6 +52,10 @@ public class User {
     @Column(length = 120)
     private String customStatus;
 
+    // Personal avatar ring color (hex), shown around the user's avatar everywhere.
+    @Column(length = 32)
+    private String ringColor;
+
     @Temporal(TemporalType.TIMESTAMP)
     private Date lastHeartbeat;
 

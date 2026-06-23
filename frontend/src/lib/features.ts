@@ -14,18 +14,19 @@ export interface FeatureItem {
 }
 
 export const FEATURES: FeatureItem[] = [
-  { key: 'polls', title: 'Create polls', desc: 'Type /poll Question | A | B to start a vote.' },
-  { key: 'effects', title: 'Message effects', desc: 'Send with /slam, /gentle, or /spoiler tap-to-reveal.' },
-  { key: 'superreact', title: 'Super-reactions', desc: 'React 🎉 or 🔥 for a sound + confetti burst.' },
-  { key: 'accent', title: 'Pick your accent', desc: 'Recolor the whole app from Settings → Accent.' },
-  { key: 'markdown', title: 'Rich formatting', desc: 'Use > quotes, - lists, and | tables | in messages.' },
+  { key: 'profile', title: 'Your profile page', desc: 'Click your name in the sidebar — manage profile, settings & posts in one place.' },
+  { key: 'polls', title: 'Polls', desc: 'Tap the poll button in the composer to ask the team.' },
+  { key: 'notes', title: 'Notes to self', desc: 'Open “Notes” in the sidebar — a private space just for you.' },
+  { key: 'rings', title: 'Custom avatar ring', desc: 'Pick a ring color in your profile.' },
   { key: 'recap', title: 'Daily recap & streaks', desc: 'Open the Feed for your streak and the week’s top post.' },
   { key: 'status', title: 'Custom status', desc: 'Set “🌴 On leave” from your profile.' },
   { key: 'dnd', title: 'Do Not Disturb', desc: 'Silence pings — with optional quiet hours — in Settings.' },
   { key: 'favorites', title: 'Favorite channels', desc: 'Star a channel to pin it to the top.' },
+  { key: 'effects', title: 'Message effects', desc: 'Send with /slam, /gentle, or /spoiler tap-to-reveal.' },
+  { key: 'accent', title: 'Pick your accent', desc: 'Recolor the whole app from Settings → Accent.' },
 ];
 
-const KEY = 'taskis-features-v3';
+const KEY = 'taskis-features-v5';
 const EVT = 'taskis:feature';
 
 interface State { seen?: boolean; dismissed?: boolean; done?: string[] }
