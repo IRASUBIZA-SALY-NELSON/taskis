@@ -107,7 +107,16 @@ public class AuthController {
         Map<String, Object> response = new HashMap<>();
         response.put("status", "AUTHENTICATED");
         response.put("token", jwt);
+        response.put("fileToken", jwtUtil.generateFileToken(user.getUsername()));
         response.put("user", user);
         return response;
+    }
+
+    /** Issue a fresh file-scoped token for an already-authenticated session
+        (covers sessions created before file tokens existed). */
+    @GetMapping("/file-token")
+    public ResponseEntity<?> fileToken(java.security.Principal principal) {
+        if (principal == null) return ResponseEntity.status(401).body("Unauthorized");
+        return ResponseEntity.ok(Map.of("fileToken", jwtUtil.generateFileToken(principal.getName())));
     }
 }

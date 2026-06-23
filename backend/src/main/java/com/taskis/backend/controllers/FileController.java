@@ -27,7 +27,8 @@ public class FileController {
         String token = null;
         if (authHeader != null && authHeader.startsWith("Bearer ")) token = authHeader.substring(7);
         else if (tokenParam != null && !tokenParam.isBlank()) token = tokenParam;
-        return jwtUtil.isTokenValid(token);
+        // Only a file-scoped token is accepted — never the powerful session JWT.
+        return jwtUtil.isValidFileToken(token);
     }
 
     // Only these may be served inline; everything else is forced to download so an
@@ -60,6 +61,7 @@ public class FileController {
             HttpHeaders headers = new HttpHeaders();
             headers.setCacheControl("private, max-age=86400");
             headers.add("X-Content-Type-Options", "nosniff");
+            headers.add("Referrer-Policy", "no-referrer"); // don't leak the ?t= token via Referer
             headers.add("Content-Security-Policy", "default-src 'none'; sandbox; style-src 'unsafe-inline'");
             String fname = name == null || name.isBlank() ? "file" : name;
             headers.add(HttpHeaders.CONTENT_DISPOSITION,

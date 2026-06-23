@@ -61,10 +61,24 @@ public class JwtUtil {
         return (extractedUsername.equals(username) && !isTokenExpired(token));
     }
 
-    /** Signature + expiry check only (no username binding) — for resource access like files. */
-    public boolean isTokenValid(String token) {
+    /** A read-only, file-scoped token — safe(r) to carry in a URL than the session JWT. */
+    public String generateFileToken(String username) {
+        return Jwts.builder()
+                .setSubject(username)
+                .claim("scope", "files")
+                .setIssuedAt(new Date(System.currentTimeMillis()))
+                .setExpiration(new Date(System.currentTimeMillis() + expiration))
+                .signWith(getSigningKey(), SignatureAlgorithm.HS512)
+                .compact();
+    }
+
+    /** True only for a non-expired token that carries the "files" scope claim. */
+    public boolean isValidFileToken(String token) {
         try {
-            return token != null && !isTokenExpired(token);
+            if (token == null) return false;
+            Claims claims = extractAllClaims(token);
+            return "files".equals(claims.get("scope", String.class))
+                    && claims.getExpiration() != null && claims.getExpiration().after(new Date());
         } catch (Exception e) {
             return false;
         }
