@@ -53,6 +53,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   const [confidUnlocked, setConfidUnlocked] = useState(true);
   const [passInput, setPassInput] = useState('');
   const [passErr, setPassErr] = useState(false);
+  const [passMsg, setPassMsg] = useState('Incorrect passkey. Try again.');
   const [replyTo, setReplyTo] = useState<any>(null);
   const [editMsg, setEditMsg] = useState<any>(null);
   const [editVal, setEditVal] = useState('');
@@ -150,9 +151,12 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
         try { const u = JSON.parse(localStorage.getItem('user') || '{}'); u.confidentialUnlocked = true; localStorage.setItem('user', JSON.stringify(u)); } catch { /* noop */ }
         fetchMsgs();
       } else {
+        const t = await r.text().catch(() => '');
+        setPassMsg(r.status === 429 && t ? t : 'Incorrect passkey. Try again.');
         setPassErr(true);
       }
     } catch {
+      setPassMsg('Could not reach the server. Try again.');
       setPassErr(true);
     }
     setUnlocking(false);
@@ -1065,7 +1069,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
               className={`tk-input text-center tracking-[0.3em] ${passErr ? 'is-error' : ''}`}
             />
             {passErr && (
-              <div className="flex items-center justify-center gap-1.5 mt-2.5 text-[12.5px] text-danger"><AlertCircle className="w-[13px] h-[13px] flex-none" /><span>Incorrect passkey. Try again.</span></div>
+              <div className="flex items-center justify-center gap-1.5 mt-2.5 text-[12.5px] text-danger"><AlertCircle className="w-[13px] h-[13px] flex-none" /><span>{passMsg}</span></div>
             )}
             <button type="submit" disabled={!passInput.trim() || unlocking} className="btn-accent w-full py-[11px] text-sm mt-[22px]">{unlocking ? <span className="w-[14px] h-[14px] rounded-full border-2 border-white/35 border-t-white tk-spin" /> : <Lock className="w-[14px] h-[14px]" />}Unlock channel</button>
           </form>

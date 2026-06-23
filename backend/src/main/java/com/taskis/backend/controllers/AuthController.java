@@ -48,6 +48,9 @@ public class AuthController {
     @Autowired
     private org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate;
 
+    @Autowired
+    private com.taskis.backend.security.BruteForceGuard bruteForce;
+
     @PostMapping("/access")
     public ResponseEntity<?> access(@RequestBody Map<String, String> body) {
         String token = body.get("token");
@@ -88,17 +91,28 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody Map<String, String> body) {
+    public ResponseEntity<?> login(@RequestBody Map<String, String> body,
+            jakarta.servlet.http.HttpServletRequest request) {
         String username = body.get("username");
         String passphrase = body.get("passphrase");
 
+        String key = "login:" + request.getRemoteAddr();
+        long wait = bruteForce.retryAfterMs(key);
+        if (wait > 0) {
+            long secs = (wait + 999) / 1000;
+            return ResponseEntity.status(429).header("Retry-After", String.valueOf(secs))
+                    .body("Too many attempts. Try again in " + secs + "s.");
+        }
+
         User user = userRepository.findByUsername(username).orElse(null);
         if (user != null && passwordEncoder.matches(passphrase, user.getPassword())) {
+            bruteForce.onSuccess(key); // valid credentials — clear the counter
             if (Boolean.FALSE.equals(user.getActive())) {
                 return ResponseEntity.status(403).body("This account has been deactivated.");
             }
             return ResponseEntity.ok(generateAuthResponse(user));
         }
+        bruteForce.onFailure(key);
         return ResponseEntity.badRequest().body("Invalid credentials");
     }
 
