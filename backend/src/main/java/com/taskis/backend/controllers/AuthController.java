@@ -48,6 +48,9 @@ public class AuthController {
     @Autowired
     private org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate;
 
+    @Autowired
+    private com.taskis.backend.services.AuditService auditService;
+
     @PostMapping("/access")
     public ResponseEntity<?> access(@RequestBody Map<String, String> body) {
         String token = body.get("token");
@@ -81,6 +84,7 @@ public class AuthController {
             if (user != null) {
                 user.setPassword(passwordEncoder.encode(passphrase));
                 userRepository.save(user);
+                auditService.log(user.getUsername(), "AUTH", "REGISTER", "User registered successfully", user.getId(), user.getUsername(), null, "SUCCESS");
                 return ResponseEntity.ok(generateAuthResponse(user));
             }
         }
@@ -95,10 +99,13 @@ public class AuthController {
         User user = userRepository.findByUsername(username).orElse(null);
         if (user != null && passwordEncoder.matches(passphrase, user.getPassword())) {
             if (Boolean.FALSE.equals(user.getActive())) {
+                auditService.log(username, "AUTH", "LOGIN_BLOCKED", "Login blocked — account deactivated", user.getId(), username, null, "FAILURE");
                 return ResponseEntity.status(403).body("This account has been deactivated.");
             }
+            auditService.log(username,"AUTH", "LOGIN", "Successful login", user.getId(), username, null, "SUCCESS");
             return ResponseEntity.ok(generateAuthResponse(user));
         }
+        auditService.log(username, "AUTH", "LOGIN_FAILED", "Failed login attempt for username: " + username, null, username, null, "FAILURE");
         return ResponseEntity.badRequest().body("Invalid credentials");
     }
 

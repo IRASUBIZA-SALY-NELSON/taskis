@@ -90,6 +90,9 @@ public class ChatController {
         return ResponseEntity.status(403).body("Incorrect passkey");
     }
 
+    @Autowired
+    private com.taskis.backend.services.AuditService auditService;
+
     // WebSocket Message Handling
     @MessageMapping("/chat.send")
     public void sendMessage(@Payload MessageDto messageDto, Principal principal) {
@@ -312,6 +315,7 @@ public class ChatController {
 
         Message savedMessage = messageRepository.save(message);
         messagingTemplate.convertAndSend("/topic/" + message.getChannel(), savedMessage);
+        auditService.log(sender.getUsername(), "MESSAGE", "SEND_MESSAGE", "Sent message in #" + message.getChannel() + (message.getContent() != null ? ": " + message.getContent().substring(0, Math.min(60, message.getContent().length())) : ""), savedMessage.getId(), "#" + message.getChannel(), null, "SUCCESS");
         return ResponseEntity.ok(savedMessage);
     }
 
@@ -417,6 +421,7 @@ public class ChatController {
         msg.setContent("[deleted]");
         messageRepository.save(msg);
         messagingTemplate.convertAndSend("/topic/" + msg.getChannel(), msg);
+        auditService.log(principal.getName(), "MESSAGE", "DELETE_MESSAGE", "Deleted message " + id + " in #" + msg.getChannel(), id, "#" + msg.getChannel(), null, "SUCCESS");
         return ResponseEntity.ok().build();
     }
 
@@ -442,6 +447,7 @@ public class ChatController {
         msg.setEdited(true);
         messageRepository.save(msg);
         messagingTemplate.convertAndSend("/topic/" + msg.getChannel(), msg);
+        auditService.log(principal.getName(), "MESSAGE", "EDIT_MESSAGE", "Edited message " + id + " in #" + msg.getChannel(), id, "#" + msg.getChannel(), null, "SUCCESS");
         return ResponseEntity.ok(msg);
     }
 

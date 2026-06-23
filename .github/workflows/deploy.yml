@@ -39,11 +39,7 @@ jobs:
                   if [ "$FRONTEND_CHANGED" = "true" ]; then
                     echo "==> Build frontend"
                     cd /home/plp/taskis/frontend
-                    if echo "$CHANGED" | grep -q '^frontend/package'; then
-                      npm ci --no-audit --no-fund
-                    else
-                      npm install --no-audit --no-fund
-                    fi
+                    npm ci --no-audit --no-fund
                     NEXT_TELEMETRY_DISABLED=1 npm run build
                   else
                     echo "==> Skipping frontend build (no frontend changes)"
