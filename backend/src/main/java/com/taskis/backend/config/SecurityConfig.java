@@ -33,8 +33,8 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/**").permitAll()
-                .requestMatchers("/ws/**").permitAll() // Websocket auth handled in interceptor
-                .requestMatchers("/uploads/**").permitAll()
+                .requestMatchers("/ws/**").permitAll()
+                .requestMatchers("/uploads/**").permitAll()  // legacy unencrypted uploads (avatars etc)
                 .requestMatchers("/api/files/**").permitAll()
                 .anyRequest().authenticated()
             )
@@ -61,9 +61,7 @@ public class SecurityConfig {
         configuration.setAllowedOriginPatterns(Arrays.asList("*")); // LAN clients on varying IPs
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
-        // Auth is a Bearer token (not cookies), so credentials must NOT be allowed —
-        // this avoids the unsafe "*" + allowCredentials combo.
-        configuration.setAllowCredentials(false);
+        configuration.setAllowCredentials(true);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;

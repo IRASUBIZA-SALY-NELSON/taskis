@@ -25,20 +25,20 @@ public class ScheduledTasks {
     @Autowired
     private CommentRepository commentRepository;
 
-    public static final long POST_TTL_MS = 24L * 60 * 60 * 1000; // exactly one day
+    @Autowired
+    private com.taskis.backend.repositories.AuditLogRepository auditLogRepository;
 
-    /** Delete a locally-uploaded image file (ignores external URLs like GIFs). */
+    public static final long POST_TTL_MS = 24L * 60 * 60 * 1000;
+
     public static void deleteUploadedImage(String imageUrl) {
         if (imageUrl == null || !imageUrl.startsWith("/uploads/")) return;
         try {
             Path base = Paths.get(System.getProperty("user.dir"), "uploads").toAbsolutePath().normalize();
             Path file = base.resolve(imageUrl.substring("/uploads/".length())).normalize();
             if (file.startsWith(base)) Files.deleteIfExists(file);
-        } catch (Exception ignored) {
-        }
+        } catch (Exception ignored) {}
     }
 
-    // Purge posts (their comments + image files) older than 24h. Runs every 5 minutes.
     @Scheduled(fixedRate = 5 * 60 * 1000)
     @Transactional
     public void purgeExpiredPosts() {
@@ -51,5 +51,12 @@ public class ScheduledTasks {
         }
         postRepository.deleteAll(expired);
         System.out.println("[Taskis] Purged " + expired.size() + " expired post(s).");
+    }
+
+    @Scheduled(fixedRate = 60 * 60 * 1000)
+    @Transactional
+    public void purgeOldAuditLogs() {
+        Date cutoff = new Date(System.currentTimeMillis() - 24L * 60 * 60* 1000);
+        auditLogRepository.deleteByTimestampBefore(cutoff);
     }
 }

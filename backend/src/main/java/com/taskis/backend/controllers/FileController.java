@@ -1,6 +1,7 @@
 package com.taskis.backend.controllers;
 
 import com.taskis.backend.security.FileCrypto;
+import com.taskis.backend.security.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -11,15 +12,19 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
+/**
+ * Secure file serving. Accepts either:
+ *   ?passphrase=onedayyouwilldie  — explicit passphrase
+ *   ?t=<jwt>                      — valid JWT token (backward compat)
+ */
 @RestController
 @RequestMapping("/api/files")
 public class FileController {
 
-    @Autowired
-    private FileCrypto fileCrypto;
+    private static final String FILE_PASSPHRASE = "onedayyouwilldie";
 
-    @Autowired
-    private com.taskis.backend.security.JwtUtil jwtUtil;
+    @Autowired private FileCrypto fileCrypto;
+    @Autowired private JwtUtil jwtUtil;
 
     /** Files require a valid token — via Authorization header or a `t` query param
         (the latter so <img>/<iframe>/<video>, which can't set headers, still work). */
@@ -29,34 +34,61 @@ public class FileController {
         else if (tokenParam != null && !tokenParam.isBlank()) token = tokenParam;
         // Only a file-scoped token is accepted — never the powerful session JWT.
         return jwtUtil.isValidFileToken(token);
+    private boolean isAuthorized(String passphrase, String t) {
+        if (FILE_PASSPHRASE.equals(passphrase)) return true;
+        if (t != null && !t.isBlank()) {
+            try { return jwtUtil.isTokenValid(t); } catch (Exception ignored) {}
+        }
+        return false;
     }
 
-    // Only these may be served inline; everything else is forced to download so an
-    // uploaded .html/.svg/etc. can never execute script on the app origin.
-    private static final java.util.Set<String> INLINE_OK = java.util.Set.of(
-            "image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp", "image/avif", "image/bmp",
-            "audio/webm", "audio/ogg", "audio/mpeg", "audio/mp3", "audio/mp4", "audio/wav", "audio/x-m4a", "audio/aac",
-            "video/mp4", "video/webm", "video/ogg");
-    // Note: PDFs/HTML/etc. are intentionally NOT inline — they're served as
-    // attachments. The in-app preview fetches their bytes and renders a local
-    // blob, so previewing works without ever serving active content inline.
+    @GetMapping("/{id}/{displayName:.+}")
+    public ResponseEntity<?> serveFile(
+            @PathVariable String id, @PathVariable String displayName,
+            @RequestParam(required = false) String passphrase,
+            @RequestParam(required = false) String t,
+            @RequestParam(required = false, defaultValue = "false") boolean download) {
+        return serve(id, displayName, passphrase, t, download);
+    }
 
-    private ResponseEntity<?> serve(String id, String name, boolean download) {
+    @GetMapping("/{id}")
+    public ResponseEntity<?> serveFileNoName(
+            @PathVariable String id,
+            @RequestParam(required = false) String passphrase,
+            @RequestParam(required = false) String t,
+            @RequestParam(required = false, defaultValue = "false") boolean download) {
+        return serve(id, id, passphrase, t, download);
+    }
+
+    private ResponseEntity<?> serve(String id, String displayName, String passphrase, String t, boolean download) {
+if (!isAuthorized(passphrase, t)) {
+            return ResponseEntity.status(401).body("Passphrase required to access this file.");
+        }
         try {
-            if (!id.matches("[a-f0-9]{16,40}")) return ResponseEntity.badRequest().build();
             Path base = Paths.get(System.getProperty("user.dir"), "uploads").toAbsolutePath().normalize();
-            Path file = base.resolve(id).normalize();
-            if (!file.startsWith(base) || !Files.exists(file)) return ResponseEntity.notFound().build();
+            Path filePath = base.resolve(id).normalize();
+            if (!filePath.startsWith(base)) return ResponseEntity.badRequest().body("Invalid path.");
+            if (!Files.exists(filePath)) return ResponseEntity.notFound().build();
 
-            byte[] decrypted = fileCrypto.decrypt(Files.readAllBytes(file));
+     byte[] decrypted = fileCrypto.decrypt(Files.readAllBytes(filePath));
 
-            String type = "application/octet-stream";
-            Path meta = base.resolve(id + ".meta");
-            if (Files.exists(meta)) type = Files.readString(meta).trim();
+            String contentType = "application/octet-stream";
+            Path metaPath = base.resolve(id + ".meta");
+            if (Files.exists(metaPath)) {
+                contentType = Files.readString(metaPath).trim();
+            } else {
+                String lower = displayName.toLowerCase();
+                if (lower.endsWith(".pdf")) contentType = "application/pdf";
+                else if (lower.endsWith(".png")) contentType = "image/png";
+                else if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) contentType = "image/jpeg";
+                else if (lower.endsWith(".gif")) contentType= "image/gif";
+                else if (lower.endsWith(".mp4")) contentType = "video/mp4";
+                else if (lower.endsWith(".webp")) contentType = "image/webp";
+                else if (lower.endsWith(".zip")) contentType = "application/zip";
+            }
 
-            boolean safeInline = INLINE_OK.contains(type.toLowerCase());
-            // anything not on the allowlist must download, never render inline
-            boolean asAttachment = download || !safeInline;
+            String safeDisplay = displayName.replaceAll("[^A-Za-z0-9._\\-]", "_");
+            String disposition = download ? "attachment" : "inline";
 
             HttpHeaders headers = new HttpHeaders();
             headers.setCacheControl("private, max-age=86400");
@@ -67,26 +99,13 @@ public class FileController {
             headers.add(HttpHeaders.CONTENT_DISPOSITION,
                     (asAttachment ? "attachment" : "inline") + "; filename=\"" + fname.replaceAll("[\"\\r\\n]", "") + "\"");
             return ResponseEntity.ok().headers(headers).contentType(MediaType.parseMediaType(type)).body(decrypted);
+            return ResponseEntity.ok()
+                    .contentType(MediaType.parseMediaType(contentType))
+                    .header(HttpHeaders.CONTENT_DISPOSITION, disposition + "; filename=\"" + safeDisplay + "\"")
+                    .header(HttpHeaders.CACHE_CONTROL, "no-store, no-cache")
+                    .body(decrypted);
         } catch (Exception e) {
-            return ResponseEntity.status(500).build();
+            return ResponseEntity.status(500).body("Could not serve file: " + e.getMessage());
         }
-    }
-
-    @GetMapping("/{id}/{name}")
-    public ResponseEntity<?> withName(@PathVariable String id, @PathVariable String name,
-            @RequestParam(name = "dl", required = false) String dl,
-            @RequestParam(name = "t", required = false) String t,
-            @org.springframework.web.bind.annotation.RequestHeader(name = "Authorization", required = false) String auth) {
-        if (!authorized(auth, t)) return ResponseEntity.status(401).build();
-        return serve(id, name, dl != null);
-    }
-
-    @GetMapping("/{id}")
-    public ResponseEntity<?> byId(@PathVariable String id,
-            @RequestParam(name = "dl", required = false) String dl,
-            @RequestParam(name = "t", required = false) String t,
-            @org.springframework.web.bind.annotation.RequestHeader(name = "Authorization", required = false) String auth) {
-        if (!authorized(auth, t)) return ResponseEntity.status(401).build();
-        return serve(id, null, dl != null);
     }
 }

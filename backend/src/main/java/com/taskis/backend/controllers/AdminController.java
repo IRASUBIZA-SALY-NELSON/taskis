@@ -25,12 +25,24 @@ public class AdminController {
     @Autowired
     private org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
 
+    @Autowired private com.taskis.backend.repositories.AuditLogRepository auditLogRepository;
+    @Autowired private com.taskis.backend.services.AuditService auditService;
     @Autowired private com.taskis.backend.repositories.MessageRepository messageRepository;
     @Autowired private com.taskis.backend.repositories.PostRepository postRepository;
     @Autowired private com.taskis.backend.repositories.CommentRepository commentRepository;
     @Autowired private com.taskis.backend.repositories.ReportRepository reportRepository;
     @Autowired private com.taskis.backend.repositories.CustomEmojiRepository customEmojiRepository;
     @Autowired private com.taskis.backend.repositories.OtpCodeRepository otpCodeRepository;
+
+    @GetMapping("/audit-logs")
+    public ResponseEntity<?> getAuditLogs(
+            @org.springframework.web.bind.annotation.RequestParam(required = false) String category,
+            @org.springframework.web.bind.annotation.RequestParam(required = false) String actor) {
+        if (!isAdmin()) return ResponseEntity.status(403).body("Access denied");
+        if (actor != null && !actor.isBlank()) return ResponseEntity.ok(auditLogRepository.findByActorOrderByTimestampDesc(actor));
+        if (category != null && !category.isBlank()) return ResponseEntity.ok(auditLogRepository.findByCategoryOrderByTimestampDesc(category));
+        return ResponseEntity.ok(auditLogRepository.findAllByOrderByTimestampDesc());
+    }
 
     private User currentUser() {
         Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
@@ -43,6 +55,37 @@ public class AdminController {
     private boolean isAdmin() {
         User u = currentUser();
         return u != null && "ADMIN".equals(u.getRole());
+    }
+
+    @GetMapping("/analytics")
+    public ResponseEntity<?> analytics() {
+        if (!isAdmin()) return ResponseEntity.status(403).body("Access denied");
+        // Per-user message counts
+        java.util.List<com.taskis.backend.models.Message> allMessages = messageRepository.findAll();
+        java.util.Map<String, Long> msgPerUser = new java.util.LinkedHashMap<>();
+        for (com.taskis.backend.models.Message msg : allMessages) {
+            if (msg.getSender() == null) continue;
+            String uname = msg.getSender().getUsername();
+            msgPerUser.merge(uname, 1L, Long::sum);
+        }
+        // Sort by count desc, limit top 10
+        java.util.List<java.util.Map<String, Object>> perUser = msgPerUser.entrySet().stream()
+            .sorted(java.util.Map.Entry.<String, Long>comparingByValue().reversed())
+            .limit(10)
+            .map(e -> { java.util.Map<String, Object> m = new java.util.LinkedHashMap<>(); m.put("username", e.getKey()); m.put("messages", e.getValue()); return m; })
+            .collect(java.util.stream.Collectors.toList());
+
+        // Messages per channel
+        java.util.Map<String, Long> perChannel = new java.util.LinkedHashMap<>();
+        for (com.taskis.backend.models.Message msg : allMessages) {
+            if (msg.getChannel() == null) continue;
+            perChannel.merge(msg.getChannel(), 1L, Long::sum);
+        }
+
+        java.util.Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("perUser", perUser);
+        result.put("perChannel", perChannel);
+        return ResponseEntity.ok(result);
     }
 
     @GetMapping("/stats")
@@ -72,6 +115,7 @@ public class AdminController {
         if (!"ADMIN".equals(role) && !"USER".equals(role)) return ResponseEntity.badRequest().body("role must be ADMIN or USER");
         user.setRole(role);
         userRepository.save(user);
+        auditService.log(currentUser() != null ? currentUser().getUsername() : "admin", "ROLE", role.equals("ADMIN") ? "PROMOTE_ADMIN" : "DEMOTE_USER", "Changed role of " + user.getUsername() + " to " + role, id, user.getUsername(), null, "SUCCESS");
         return ResponseEntity.ok(user);
     }
 
@@ -184,7 +228,8 @@ public class AdminController {
             user.setPassword(passwordEncoder.encode(UUID.randomUUID().toString()));
         }
         userRepository.save(user);
-
+        auditService.log(currentUser() != null ? currentUser().getUsername() : "admin", "KEY", "GENERATE_KEY",
+            "Generated access key for " + username, user.getId(), username, null, "SUCCESS");
         return ResponseEntity.ok(key);
     }
 
@@ -232,6 +277,9 @@ public class AdminController {
         Object v = body.get("active");
         user.setActive(Boolean.TRUE.equals(v) || "true".equals(String.valueOf(v)));
         userRepository.save(user);
+        auditService.log(currentUser() != null ? currentUser().getUsername() : "admin", "USER_MGMT",
+            user.getActive() ? "ACTIVATE_USER" : "DEACTIVATE_USER",
+            (user.getActive() ? "Activated" : "Deactivated") + " user " + user.getUsername(), id, user.getUsername(), null, "SUCCESS");
         return ResponseEntity.ok(user);
     }
 

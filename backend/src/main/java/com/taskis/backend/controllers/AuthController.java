@@ -50,6 +50,7 @@ public class AuthController {
 
     @Autowired
     private com.taskis.backend.security.BruteForceGuard bruteForce;
+    private com.taskis.backend.services.AuditService auditService;
 
     @PostMapping("/access")
     public ResponseEntity<?> access(@RequestBody Map<String, String> body) {
@@ -84,6 +85,7 @@ public class AuthController {
             if (user != null) {
                 user.setPassword(passwordEncoder.encode(passphrase));
                 userRepository.save(user);
+                auditService.log(user.getUsername(), "AUTH", "REGISTER", "User registered successfully", user.getId(), user.getUsername(), null, "SUCCESS");
                 return ResponseEntity.ok(generateAuthResponse(user));
             }
         }
@@ -114,6 +116,13 @@ public class AuthController {
             return ResponseEntity.ok(generateAuthResponse(user));
         }
         bruteForce.onFailure(key);
+                auditService.log(username, "AUTH", "LOGIN_BLOCKED", "Login blocked — account deactivated", user.getId(), username, null, "FAILURE");
+                return ResponseEntity.status(403).body("This account has been deactivated.");
+            }
+            auditService.log(username,"AUTH", "LOGIN", "Successful login", user.getId(), username, null, "SUCCESS");
+            return ResponseEntity.ok(generateAuthResponse(user));
+        }
+        auditService.log(username, "AUTH", "LOGIN_FAILED", "Failed login attempt for username: " + username, null, username, null, "FAILURE");
         return ResponseEntity.badRequest().body("Invalid credentials");
     }
 
