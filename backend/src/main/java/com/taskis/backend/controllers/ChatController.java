@@ -489,7 +489,8 @@ public class ChatController {
     private com.taskis.backend.security.FileCrypto fileCrypto;
 
     @PostMapping("/upload")
-    public ResponseEntity<?> uploadFile(@RequestParam("file") MultipartFile file) {
+    public ResponseEntity<?> uploadFile(@RequestParam("file") MultipartFile file,
+                                        @RequestParam(required = false, defaultValue = "general") String channel) {
         try {
             Path base = Paths.get(System.getProperty("user.dir"), "uploads").toAbsolutePath().normalize();
             Files.createDirectories(base);
@@ -498,15 +499,20 @@ public class ChatController {
             String safeName = Paths.get(original).getFileName().toString().replaceAll("[^A-Za-z0-9._-]", "_");
             String type = file.getContentType() == null ? "application/octet-stream" : file.getContentType();
 
-            // Random on-disk name + AES-encrypted contents → uploads folder is unreadable on disk.
             String id = UUID.randomUUID().toString().replace("-", "");
             Path filePath = base.resolve(id).normalize();
             if (!filePath.startsWith(base)) return ResponseEntity.badRequest().body("Invalid file path");
             Files.write(filePath, fileCrypto.encrypt(file.getBytes()));
             Files.writeString(base.resolve(id + ".meta"), type);
 
-            // The original (display) name lives only in the URL, stored encrypted in the DB.
-            String url = "/api/files/" + id + "/" + java.net.URLEncoder.encode(safeName, "UTF-8").replace("+", "%20");
+            // Confidential channel: UUID-only URL — no filename exposed anywhere
+            String url;
+            if ("confidential".equals(channel)) {
+                url = "/api/files/" + id;
+            } else {
+                url = "/api/files/" + id + "/" + java.net.URLEncoder.encode(safeName, "UTF-8").replace("+", "%20");
+            }
+
             return ResponseEntity.ok(Map.of("url", url, "type", type));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body("Could not upload file: " + e.getMessage());

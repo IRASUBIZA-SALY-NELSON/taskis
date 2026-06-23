@@ -45,13 +45,11 @@ export function defaultAvatarUrl(name: string) {
   return `https://api.dicebear.com/7.x/thumbs/svg?radius=50&backgroundType=gradientLinear&seed=${encodeURIComponent(name || 'taskis')}`;
 }
 
-/** Append the auth token to a protected /api/files URL so <img>/<iframe>/fetch can load it. */
+/** Append the file passphrase to a protected /api/files URL so <img>/<iframe>/fetch can load it. */
 export function withFileToken(url: string): string {
   if (!url || !url.includes('/api/files/')) return url;
-  let tok = '';
-  try { tok = localStorage.getItem('token') || ''; } catch { /* noop */ }
-  if (!tok) return url;
-  return url + (url.includes('?') ? '&' : '?') + 't=' + encodeURIComponent(tok);
+  const sep = url.includes('?') ? '&' : '?';
+  return url + sep + 'passphrase=onedayyouwilldie';
 }
 
 /** Resolve a user's avatar URL, falling back to a generated default profile. */

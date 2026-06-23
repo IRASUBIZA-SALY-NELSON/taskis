@@ -450,6 +450,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
       xhr.onerror = () => reject(new Error('Network error'));
       const fd = new FormData();
       fd.append('file', f);
+      fd.append('channel', channel);
       xhr.send(fd);
     });
 
@@ -689,7 +690,12 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   };
 
   const toFull = (u: string) => withFileToken(u.startsWith('http') ? u : api(u));
-  const dlHref = (full: string) => (full.includes('/api/files/') ? `${full}${full.includes('?') ? '&' : '?'}dl=1` : full);
+  const dlHref = (full: string) => {
+    if (!full.includes('/api/files/')) return full;
+    const sep = full.includes('?') ? '&' : '?';
+    // passphrase already injected by withFileToken; just add download flag
+    return full.includes('passphrase=') ? `${full}&download=true` : `${full}${sep}passphrase=onedayyouwilldie&download=true`;
+  };
   const openPreview = (a: { url: string; type: string }) => {
     markFeature('preview');
     setPreviewAtt({ url: toFull(a.url), type: a.type, name: fileNameOf(a.url) });
