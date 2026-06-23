@@ -49,6 +49,7 @@ public class AuthController {
     private org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate;
 
     @Autowired
+    private com.taskis.backend.security.BruteForceGuard bruteForce;
     private com.taskis.backend.services.AuditService auditService;
 
     @PostMapping("/access")
@@ -92,13 +93,29 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody Map<String, String> body) {
+    public ResponseEntity<?> login(@RequestBody Map<String, String> body,
+            jakarta.servlet.http.HttpServletRequest request) {
         String username = body.get("username");
         String passphrase = body.get("passphrase");
+
+        String key = "login:" + request.getRemoteAddr();
+        long wait = bruteForce.retryAfterMs(key);
+        if (wait > 0) {
+            long secs = (wait + 999) / 1000;
+            return ResponseEntity.status(429).header("Retry-After", String.valueOf(secs))
+                    .body("Too many attempts. Try again in " + secs + "s.");
+        }
 
         User user = userRepository.findByUsername(username).orElse(null);
         if (user != null && passwordEncoder.matches(passphrase, user.getPassword())) {
             if (Boolean.FALSE.equals(user.getActive())) {
+                bruteForce.onFailure(key); // deactivated: not a successful auth — keep counting
+                return ResponseEntity.status(403).body("This account has been deactivated.");
+            }
+            bruteForce.onSuccess(key); // fully authenticated — clear the counter
+            return ResponseEntity.ok(generateAuthResponse(user));
+        }
+        bruteForce.onFailure(key);
                 auditService.log(username, "AUTH", "LOGIN_BLOCKED", "Login blocked — account deactivated", user.getId(), username, null, "FAILURE");
                 return ResponseEntity.status(403).body("This account has been deactivated.");
             }
@@ -114,7 +131,16 @@ public class AuthController {
         Map<String, Object> response = new HashMap<>();
         response.put("status", "AUTHENTICATED");
         response.put("token", jwt);
+        response.put("fileToken", jwtUtil.generateFileToken(user.getUsername()));
         response.put("user", user);
         return response;
+    }
+
+    /** Issue a fresh file-scoped token for an already-authenticated session
+        (covers sessions created before file tokens existed). */
+    @GetMapping("/file-token")
+    public ResponseEntity<?> fileToken(java.security.Principal principal) {
+        if (principal == null) return ResponseEntity.status(401).body("Unauthorized");
+        return ResponseEntity.ok(Map.of("fileToken", jwtUtil.generateFileToken(principal.getName())));
     }
 }

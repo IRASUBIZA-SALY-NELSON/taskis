@@ -42,6 +42,9 @@ public class ChatController {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private com.taskis.backend.security.BruteForceGuard bruteForce;
+
     /**
      * Authorization for a channel. Named channels and the bot channel are visible
      * to every authenticated operative; a DM channel ("dm_<id1>_<id2>") is only
@@ -81,12 +84,21 @@ public class ChatController {
         User user = userRepository.findByUsername(principal.getName()).orElse(null);
         if (user == null)
             return ResponseEntity.status(401).body("User not found");
+        String key = "confid:" + user.getUsername();
+        long wait = bruteForce.retryAfterMs(key);
+        if (wait > 0) {
+            long secs = (wait + 999) / 1000;
+            return ResponseEntity.status(429).header("Retry-After", String.valueOf(secs))
+                    .body("Too many attempts. Try again in " + secs + "s.");
+        }
         String passphrase = payload.get("passphrase");
         if (confidentialPasskey.equals(passphrase)) {
+            bruteForce.onSuccess(key);
             user.setConfidentialUnlocked(true);
             userRepository.save(user);
             return ResponseEntity.ok(Map.of("success", true));
         }
+        bruteForce.onFailure(key);
         return ResponseEntity.status(403).body("Incorrect passkey");
     }
 

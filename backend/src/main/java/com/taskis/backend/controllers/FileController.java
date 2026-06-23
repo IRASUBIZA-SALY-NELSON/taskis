@@ -26,6 +26,14 @@ public class FileController {
     @Autowired private FileCrypto fileCrypto;
     @Autowired private JwtUtil jwtUtil;
 
+    /** Files require a valid token — via Authorization header or a `t` query param
+        (the latter so <img>/<iframe>/<video>, which can't set headers, still work). */
+    private boolean authorized(String authHeader, String tokenParam) {
+        String token = null;
+        if (authHeader != null && authHeader.startsWith("Bearer ")) token = authHeader.substring(7);
+        else if (tokenParam != null && !tokenParam.isBlank()) token = tokenParam;
+        // Only a file-scoped token is accepted — never the powerful session JWT.
+        return jwtUtil.isValidFileToken(token);
     private boolean isAuthorized(String passphrase, String t) {
         if (FILE_PASSPHRASE.equals(passphrase)) return true;
         if (t != null && !t.isBlank()) {
@@ -82,6 +90,15 @@ if (!isAuthorized(passphrase, t)) {
             String safeDisplay = displayName.replaceAll("[^A-Za-z0-9._\\-]", "_");
             String disposition = download ? "attachment" : "inline";
 
+            HttpHeaders headers = new HttpHeaders();
+            headers.setCacheControl("private, max-age=86400");
+            headers.add("X-Content-Type-Options", "nosniff");
+            headers.add("Referrer-Policy", "no-referrer"); // don't leak the ?t= token via Referer
+            headers.add("Content-Security-Policy", "default-src 'none'; sandbox; style-src 'unsafe-inline'");
+            String fname = name == null || name.isBlank() ? "file" : name;
+            headers.add(HttpHeaders.CONTENT_DISPOSITION,
+                    (asAttachment ? "attachment" : "inline") + "; filename=\"" + fname.replaceAll("[\"\\r\\n]", "") + "\"");
+            return ResponseEntity.ok().headers(headers).contentType(MediaType.parseMediaType(type)).body(decrypted);
             return ResponseEntity.ok()
                     .contentType(MediaType.parseMediaType(contentType))
                     .header(HttpHeaders.CONTENT_DISPOSITION, disposition + "; filename=\"" + safeDisplay + "\"")

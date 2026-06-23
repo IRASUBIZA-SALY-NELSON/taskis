@@ -79,6 +79,7 @@ export default function AuthScreen() {
       const data = await res.json();
       if (data.status === 'AUTHENTICATED') {
         localStorage.setItem('token', data.token);
+        if (data.fileToken) localStorage.setItem('fileToken', data.fileToken);
         localStorage.setItem('user', JSON.stringify(data.user));
         router.push('/feed');
       }
@@ -102,6 +103,7 @@ export default function AuthScreen() {
       const data = await res.json();
       if (data.status === 'AUTHENTICATED') {
         localStorage.setItem('token', data.token);
+        if (data.fileToken) localStorage.setItem('fileToken', data.fileToken);
         localStorage.setItem('user', JSON.stringify(data.user));
         router.push('/feed');
       }

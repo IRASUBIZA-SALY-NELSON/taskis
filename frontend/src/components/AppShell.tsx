@@ -33,6 +33,19 @@ export default function AppShell({ initialChannel = 'general' }: { initialChanne
 
   useEffect(() => { initAccent(); return initThemeWatcher(); }, []);
 
+  // Ensure a file-scoped token exists (sessions created before file tokens did won't have one).
+  const [, setFileTokenReady] = useState(0);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem('token') && !localStorage.getItem('fileToken')) {
+        fetch(`http://${window.location.hostname}:8080/api/auth/file-token`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d) => { if (d?.fileToken) { localStorage.setItem('fileToken', d.fileToken); setFileTokenReady((n) => n + 1); } })
+          .catch(() => {});
+      }
+    } catch { /* noop */ }
+  }, []);
+
   useEffect(() => {
     const openProfile = (e: Event) => {
       const name = (e as CustomEvent).detail as string;
