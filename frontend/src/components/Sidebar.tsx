@@ -45,14 +45,6 @@ export function defaultAvatarUrl(name: string) {
   return `https://api.dicebear.com/7.x/thumbs/svg?radius=50&backgroundType=gradientLinear&seed=${encodeURIComponent(name || 'taskis')}`;
 }
 
-/** Append a *file-scoped* token to a protected /api/files URL so <img>/<iframe>/fetch
-    can load it. We never put the session JWT in a URL — only this read-only file token. */
-export function withFileToken(url: string): string {
-  if (!url || !url.includes('/api/files/')) return url;
-  let tok = '';
-  try { tok = localStorage.getItem('fileToken') || ''; } catch { /* noop */ }
-  if (!tok) return url;
-  return url + (url.includes('?') ? '&' : '?') + 't=' + encodeURIComponent(tok);
 /** Append the file passphrase to a protected /api/files URL so <img>/<iframe>/fetch can load it. */
 export function withFileToken(url: string): string {
   if (!url || !url.includes('/api/files/')) return url;
