@@ -18,6 +18,7 @@ import { useCustomEmojis } from '@/lib/customEmoji';
 import { isMuted, toggleMute, playTick, playReaction } from '@/lib/notify';
 import { Bell, BellOff, ArrowDown, Bold, Italic, Code, Link as LinkIcon, Strikethrough, Flag } from 'lucide-react';
 import FilePreview, { PreviewAtt } from './FilePreview';
+import FilePassphraseGate from './FilePassphraseGate';
 import ShareModal from './ShareModal';
 import PollComposer from './PollComposer';
 import { Share2, Dices, Coins, PartyPopper, Sparkles, Heart, AtSign, Zap } from 'lucide-react';
@@ -693,16 +694,37 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   const dlHref = (full: string) => {
     if (!full.includes('/api/files/')) return full;
     const sep = full.includes('?') ? '&' : '?';
-    // passphrase already injected by withFileToken; just add download flag
     return full.includes('passphrase=') ? `${full}&download=true` : `${full}${sep}passphrase=onedayyouwilldie&download=true`;
   };
+
+  // Passphrase gate for file preview/download
+  const [gateOpen, setGateOpen] = useState(false);
+  const [gateAction, setGateAction] = useState<'preview' | 'download'>('preview');
+  const [gatePending, setGatePending] = useState<(() => void) | null>(null);
+
+  const requestAccess = (action: 'preview' | 'download', cb: () => void) => {
+    // Only gate /api/files/ URLs — old /uploads/ are unprotected
+    setGateAction(action);
+    setGatePending(() => cb);
+    setGateOpen(true);
+  };
+
   const openPreview = (a: { url: string; type: string }) => {
-    markFeature('preview');
-    setPreviewAtt({ url: toFull(a.url), type: a.type, name: fileNameOf(a.url) });
+    const full = toFull(a.url);
+    if (!full.includes('/api/files/')) {
+      markFeature('preview');
+      setPreviewAtt({ url: full, type: a.type, name: fileNameOf(a.url) });
+      return;
+    }
+    requestAccess('preview', () => {
+      markFeature('preview');
+      setPreviewAtt({ url: full, type: a.type, name: fileNameOf(a.url) });
+    });
   };
 
   const downloadAll = (atts: { url: string; type: string }[]) => {
-    atts.forEach((a, i) => setTimeout(() => {
+    const hasProtected = atts.some(a => toFull(a.url).includes('/api/files/'));
+    const doDownload = () => atts.forEach((a, i) => setTimeout(() => {
       const link = document.createElement('a');
       link.href = dlHref(toFull(a.url));
       link.download = fileNameOf(a.url);
@@ -711,6 +733,8 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
       link.click();
       link.remove();
     }, i * 220));
+    if (!hasProtected) { doDownload(); return; }
+    requestAccess('download', doDownload);
   };
 
   // ---- silly slash commands (icon-led autocomplete) ----
@@ -1796,6 +1820,17 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
 
       {/* in-app file viewer */}
       <FilePreview att={previewAtt} onClose={() => setPreviewAtt(null)} />
+
+      {/* file passphrase gate */}
+      <FilePassphraseGate
+        open={gateOpen}
+        action={gateAction}
+        onClose={() => { setGateOpen(false); setGatePending(null); }}
+        onUnlock={() => {
+          setGateOpen(false);
+          if (gatePending) { gatePending(); setGatePending(null); }
+        }}
+      />
 
       {/* share */}
       {showShare && <ShareModal user={user} channel={channel} title={isChannel ? `#${channel}` : headerTitle} members={members} onClose={() => setShowShare(false)} />}
