@@ -13,7 +13,7 @@ function presence(status?: string) {
   return { c: 'var(--t3)', label: 'Offline' };
 }
 
-export default function HoverCard({ user, children, className }: { user: any; children: React.ReactNode; className?: string }) {
+export default function HoverCard({ user, children, className, onClick }: { user: any; children: React.ReactNode; className?: string; onClick?: () => void }) {
   const [pos, setPos] = useState<{ x: number; y: number; above: boolean } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ref = useRef<HTMLSpanElement>(null);
@@ -32,7 +32,7 @@ export default function HoverCard({ user, children, className }: { user: any; ch
   const p = presence(user?.status);
 
   return (
-    <span ref={ref} onMouseEnter={show} onMouseLeave={hide} className={className}>
+    <span ref={ref} onMouseEnter={show} onMouseLeave={hide} onClick={onClick} className={className}>
       {children}
       {pos && typeof document !== 'undefined' && createPortal(
         <div

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { MotionConfig } from 'framer-motion';
 import Sidebar from '@/components/Sidebar';
@@ -20,6 +20,8 @@ export default function AppShell({ initialChannel = 'general' }: { initialChanne
   const [user, setUser] = useState<any>(null);
   const [activeChannel, setActiveChannel] = useState(initialChannel);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const prevChannelRef = useRef<string>('__posts__');
+  const isProfileView = (c: string) => c === '__me__' || c.startsWith('__user__:');
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -34,7 +36,7 @@ export default function AppShell({ initialChannel = 'general' }: { initialChanne
   useEffect(() => {
     const openProfile = (e: Event) => {
       const name = (e as CustomEvent).detail as string;
-      setActiveChannel(name ? `__user__:${name}` : '__me__');
+      setActiveChannel((curr) => { if (!isProfileView(curr)) prevChannelRef.current = curr; return name ? `__user__:${name}` : '__me__'; });
     };
     window.addEventListener('open-profile', openProfile);
     return () => window.removeEventListener('open-profile', openProfile);
@@ -81,6 +83,7 @@ export default function AppShell({ initialChannel = 'general' }: { initialChanne
                 me={user}
                 username={activeChannel === '__me__' ? user.username : activeChannel.slice('__user__:'.length)}
                 onNavigate={setActiveChannel}
+                onBack={() => setActiveChannel(prevChannelRef.current || '__posts__')}
                 onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
               />
             ) : (

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Menu, MessageSquare, Pencil, Shield, Check, Heart, MessageCircle, Image as ImageIcon } from 'lucide-react';
+import { Menu, MessageSquare, Pencil, Shield, Check, Heart, MessageCircle, Image as ImageIcon, ArrowLeft } from 'lucide-react';
 import { initials, toneFor, displayOf, avatarFor, ringFor } from './Sidebar';
 import ProfileModal from './ProfileModal';
 import { FONT_OPTIONS, getFontId, applyFont } from '@/lib/prefs';
@@ -29,7 +29,7 @@ function presence(status?: string) {
   return { c: 'var(--t3)', label: 'Offline' };
 }
 
-export default function ProfilePage({ me, username, onNavigate, onToggleSidebar }: { me: any; username: string; onNavigate: (c: string) => void; onToggleSidebar: () => void }) {
+export default function ProfilePage({ me, username, onNavigate, onBack, onToggleSidebar }: { me: any; username: string; onNavigate: (c: string) => void; onBack?: () => void; onToggleSidebar: () => void }) {
   const router = useRouter();
   const isSelf = username === me.username;
   const [profile, setProfile] = useState<any>(isSelf ? me : null);
@@ -78,7 +78,11 @@ export default function ProfilePage({ me, username, onNavigate, onToggleSidebar 
   return (
     <div className="scroll h-full overflow-y-auto bg-bg">
       <header className="flex items-center gap-[13px] px-[22px] h-[62px] flex-none border-b border-border sticky top-0 z-10" style={{ background: 'color-mix(in srgb, var(--bg) 88%, transparent)', backdropFilter: 'blur(8px)' }}>
-        <button onClick={onToggleSidebar} className="icon-btn w-8 h-8" aria-label="Toggle sidebar"><Menu className="w-[15px] h-[15px]" /></button>
+        {onBack ? (
+          <button onClick={onBack} className="icon-btn w-8 h-8" aria-label="Back"><ArrowLeft className="w-[15px] h-[15px]" /></button>
+        ) : (
+          <button onClick={onToggleSidebar} className="icon-btn w-8 h-8" aria-label="Toggle sidebar"><Menu className="w-[15px] h-[15px]" /></button>
+        )}
         <div className="flex-1 min-w-0">
           <div className="text-[15.5px] font-semibold text-t1 leading-tight truncate">{isSelf ? 'Your profile' : displayOf(u)}</div>
           <div className="text-xs text-t2">{isSelf ? 'Manage your profile & settings' : `@${u.username}`}</div>

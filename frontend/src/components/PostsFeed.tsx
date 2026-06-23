@@ -19,6 +19,7 @@ const api = (p: string) => `http://${window.location.hostname}:8080${p}`;
 const token = () => localStorage.getItem('token');
 const authJson = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` });
 const mediaUrl = (u?: string) => (!u ? '' : u.startsWith('http') ? u : api(u));
+const openProfile = (uname?: string) => { if (uname && uname !== 'Taskis Bot') window.dispatchEvent(new CustomEvent('open-profile', { detail: uname })); };
 
 
 function parseRx(r: string): Record<string, string[]> {
@@ -152,9 +153,11 @@ function PostCard({ post, user, now, onChange, onDelete, onReport, onZoom }: { p
       className="card transition-colors hover:border-border-strong"
     >
       <div className="flex items-center gap-3 px-4 py-3">
-        <Avatar u={post.author} />
+        <button onClick={() => openProfile(post.author?.username)} className="flex-none hover:opacity-85 transition-opacity" title={`View ${displayOf(post.author)}`}>
+          <Avatar u={post.author} />
+        </button>
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-semibold text-t1 truncate">{displayOf(post.author)}</div>
+          <button onClick={() => openProfile(post.author?.username)} className="text-sm font-semibold text-t1 truncate hover:underline decoration-border block max-w-full text-left">{displayOf(post.author)}</button>
           <div className="text-[12px] text-t3">{timeAgo(post.createdAt)}</div>
         </div>
         {post.expiresAt && (
@@ -231,9 +234,9 @@ function PostCard({ post, user, now, onChange, onDelete, onReport, onZoom }: { p
               {comments.length === 0 && loaded && <div className="text-[13px] text-t3">No comments yet — be the first.</div>}
               {comments.map((c) => (
                 <div key={c.id} className="flex items-start gap-2.5">
-                  <Avatar u={c.author} size={28} />
+                  <button onClick={() => openProfile(c.author?.username)} className="flex-none hover:opacity-85 transition-opacity"><Avatar u={c.author} size={28} /></button>
                   <div className="min-w-0">
-                    <span className="text-[13px] font-semibold text-t1 mr-1.5">{displayOf(c.author)}</span>
+                    <button onClick={() => openProfile(c.author?.username)} className="text-[13px] font-semibold text-t1 mr-1.5 hover:underline decoration-border">{displayOf(c.author)}</button>
                     <span className="text-[13.5px] text-t1">{renderText(c.content)}</span>
                     <div className="text-[11px] text-t3 mt-0.5">{timeAgo(c.createdAt)}</div>
                   </div>
