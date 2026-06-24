@@ -327,7 +327,13 @@ public class ChatController {
 
         Message savedMessage = messageRepository.save(message);
         messagingTemplate.convertAndSend("/topic/" + message.getChannel(), savedMessage);
-        auditService.log(sender.getUsername(), "MESSAGE", "SEND_MESSAGE", "Sent message in #" + message.getChannel() + (message.getContent() != null ? ": " + message.getContent().substring(0, Math.min(60, message.getContent().length())) : ""), savedMessage.getId(), "#" + message.getChannel(), null, "SUCCESS");
+        // Audit the action + identifiers only — never the payload. Logging message content
+        // (even truncated) would copy #confidential/DM text into the flat audit table, which
+        // isn't gated by confidentialUnlocked / DM-participant checks.
+        auditService.log(sender.getUsername(), "MESSAGE", "SEND_MESSAGE",
+                "Sent message in #" + message.getChannel() + " (len="
+                        + (message.getContent() == null ? 0 : message.getContent().length()) + ")",
+                savedMessage.getId(), "#" + message.getChannel(), null, "SUCCESS");
         return ResponseEntity.ok(savedMessage);
     }
 

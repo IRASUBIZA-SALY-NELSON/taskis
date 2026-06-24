@@ -110,18 +110,14 @@ public class AuthController {
         if (user != null && passwordEncoder.matches(passphrase, user.getPassword())) {
             if (Boolean.FALSE.equals(user.getActive())) {
                 bruteForce.onFailure(key); // deactivated: not a successful auth — keep counting
-                return ResponseEntity.status(403).body("This account has been deactivated.");
-            }
-            bruteForce.onSuccess(key); // fully authenticated — clear the counter
-            return ResponseEntity.ok(generateAuthResponse(user));
-        }
-        bruteForce.onFailure(key);
                 auditService.log(username, "AUTH", "LOGIN_BLOCKED", "Login blocked — account deactivated", user.getId(), username, null, "FAILURE");
                 return ResponseEntity.status(403).body("This account has been deactivated.");
             }
-            auditService.log(username,"AUTH", "LOGIN", "Successful login", user.getId(), username, null, "SUCCESS");
+            bruteForce.onSuccess(key); // fully authenticated — clear the counter
+            auditService.log(username, "AUTH", "LOGIN", "Successful login", user.getId(), username, null, "SUCCESS");
             return ResponseEntity.ok(generateAuthResponse(user));
         }
+        bruteForce.onFailure(key);
         auditService.log(username, "AUTH", "LOGIN_FAILED", "Failed login attempt for username: " + username, null, username, null, "FAILURE");
         return ResponseEntity.badRequest().body("Invalid credentials");
     }
