@@ -39,15 +39,22 @@ public class User {
     @Convert(converter = com.taskis.backend.security.StringCryptoConverter.class)
     private String status = "OFFLINE";
 
+    // Internal security flags — never serialize to clients (would reveal who holds
+    // the secret archive / confidential access and lockout state to anyone reading a channel).
+    @JsonIgnore
     private Boolean archiveUnlocked = false;
 
     // Server-side gate for #confidential — set only after the correct passkey.
+    // Kept serialized: the client uses it to decide whether to re-prompt for the passkey.
     private Boolean confidentialUnlocked = false;
 
+    @JsonIgnore
     private Integer failedArchiveAttempts = 0;
 
+    @JsonIgnore
     private Boolean pictureChanged = false;
 
+    @JsonIgnore
     private Boolean active = true;
 
     private String displayName;
@@ -63,6 +70,8 @@ public class User {
     @Column(length = 32)
     private String ringColor;
 
+    // Presence is derived server-side into `status`; the raw beat time isn't the client's business.
+    @JsonIgnore
     @Temporal(TemporalType.TIMESTAMP)
     private Date lastHeartbeat;
 

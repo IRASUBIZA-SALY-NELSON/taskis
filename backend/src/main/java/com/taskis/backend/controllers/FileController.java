@@ -21,14 +21,64 @@ public class FileController {
     @Autowired
     private com.taskis.backend.security.JwtUtil jwtUtil;
 
-    /** Files require a valid token — via Authorization header or a `t` query param
-        (the latter so <img>/<iframe>/<video>, which can't set headers, still work). */
-    private boolean authorized(String authHeader, String tokenParam) {
-        String token = null;
-        if (authHeader != null && authHeader.startsWith("Bearer ")) token = authHeader.substring(7);
-        else if (tokenParam != null && !tokenParam.isBlank()) token = tokenParam;
-        // Only a file-scoped token is accepted — never the powerful session JWT.
-        return jwtUtil.isValidFileToken(token);
+    @Autowired
+    private com.taskis.backend.repositories.MessageRepository messageRepository;
+
+    @Autowired
+    private com.taskis.backend.repositories.UserRepository userRepository;
+
+    /** Pull the bearer/`t` token; null if absent. */
+    private String token(String authHeader, String tokenParam) {
+        if (authHeader != null && authHeader.startsWith("Bearer ")) return authHeader.substring(7);
+        if (tokenParam != null && !tokenParam.isBlank()) return tokenParam;
+        return null;
+    }
+
+    /**
+     * A file is servable when the token is a valid file-scoped token AND — if the file is
+     * attached to a restricted channel (#confidential or a DM) — the token's owner is allowed
+     * into that channel. Files not tied to a restricted message (avatars, feed images, named
+     * channels) only need a valid file token. This closes the channel-blind file hole: a valid
+     * file token alone no longer fetches confidential exam papers by id.
+     */
+    private boolean canServe(String id, String token) {
+        if (!jwtUtil.isValidFileToken(token)) return false;
+
+        com.taskis.backend.models.User user;
+        try {
+            user = userRepository.findByUsername(jwtUtil.extractUsername(token)).orElse(null);
+        } catch (Exception e) {
+            return false;
+        }
+
+        // #confidential: any attached file requires the unlocked flag.
+        for (com.taskis.backend.models.Message m : messageRepository.findByChannel("confidential")) {
+            String url = m.getAttachmentUrl();
+            if (url != null && url.contains(id)) {
+                return user != null && Boolean.TRUE.equals(user.getConfidentialUnlocked());
+            }
+        }
+
+        // DMs: only the two participants may fetch attachments.
+        for (com.taskis.backend.models.Message m : messageRepository.findByChannelStartingWith("dm_")) {
+            String url = m.getAttachmentUrl();
+            if (url != null && url.contains(id)) {
+                return user != null && inDm(user, m.getChannel());
+            }
+        }
+
+        return true; // not a restricted-channel file
+    }
+
+    private boolean inDm(com.taskis.backend.models.User user, String channel) {
+        String[] parts = channel.split("_");
+        if (parts.length != 3 || user.getId() == null) return false;
+        try {
+            return user.getId().equals(Long.parseLong(parts[1]))
+                    || user.getId().equals(Long.parseLong(parts[2]));
+        } catch (NumberFormatException e) {
+            return false;
+        }
     }
 
     // Only these may be served inline; everything else is forced to download so an
@@ -77,7 +127,7 @@ public class FileController {
             @RequestParam(name = "dl", required = false) String dl,
             @RequestParam(name = "t", required = false) String t,
             @org.springframework.web.bind.annotation.RequestHeader(name = "Authorization", required = false) String auth) {
-        if (!authorized(auth, t)) return ResponseEntity.status(401).build();
+        if (!canServe(id, token(auth, t))) return ResponseEntity.status(401).build();
         return serve(id, name, dl != null);
     }
 
@@ -86,7 +136,7 @@ public class FileController {
             @RequestParam(name = "dl", required = false) String dl,
             @RequestParam(name = "t", required = false) String t,
             @org.springframework.web.bind.annotation.RequestHeader(name = "Authorization", required = false) String auth) {
-        if (!authorized(auth, t)) return ResponseEntity.status(401).build();
+        if (!canServe(id, token(auth, t))) return ResponseEntity.status(401).build();
         return serve(id, null, dl != null);
     }
 }
