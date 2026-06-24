@@ -40,6 +40,9 @@ public class FileController {
      * into that channel. Files not tied to a restricted message (avatars, feed images, named
      * channels) only need a valid file token. This closes the channel-blind file hole: a valid
      * file token alone no longer fetches confidential exam papers by id.
+     *
+     * Only a file-scoped token is accepted — never the powerful session JWT, and no shared
+     * passphrase (a static secret shipped in the bundle is trivially extractable).
      */
     private boolean canServe(String id, String token) {
         if (!jwtUtil.isValidFileToken(token)) return false;
@@ -82,7 +85,7 @@ public class FileController {
     }
 
     // Only these may be served inline; everything else is forced to download so an
-    // uploaded .html/.svg/etc. can never execute script on the app origin.
+    // uploaded .html/.svg/.pdf/etc. can never execute script on the app origin.
     private static final java.util.Set<String> INLINE_OK = java.util.Set.of(
             "image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp", "image/avif", "image/bmp",
             "audio/webm", "audio/ogg", "audio/mpeg", "audio/mp3", "audio/mp4", "audio/wav", "audio/x-m4a", "audio/aac",
