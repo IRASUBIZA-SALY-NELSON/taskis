@@ -61,9 +61,9 @@ public class SecurityConfig {
         configuration.setAllowedOriginPatterns(Arrays.asList("*")); // LAN clients on varying IPs
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
-        // Auth is a Bearer token from localStorage (no cookies), so credentialed CORS isn't
-        // needed. Keeping this false avoids reflecting every origin with credentials.
-        configuration.setAllowCredentials(false);
+        // SockJS requires Allow-Credentials: true. setAllowedOriginPatterns("*") safely
+        // echoes back the actual origin instead of "*", so this combination is valid.
+        configuration.setAllowCredentials(true);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;
