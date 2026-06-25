@@ -27,7 +27,7 @@ const copy: Record<Step, { eyebrow: string; title: string; subtitle: (u: string)
 };
 
 export default function AuthScreen() {
-  const [step, setStep] = useState<Step>('INIT');
+  const [step, setStep] = useState<Step>('LOGIN');
   const [token, setToken] = useState('');
   const [username, setUsername] = useState('');
   const [passphrase, setPassphrase] = useState('');
@@ -227,6 +227,9 @@ export default function AuthScreen() {
             <button type="submit" disabled={loading} className="btn-accent w-full mt-[18px] py-3 text-[14.5px]">
               {loading && <Spinner />}
               <span>{loading ? 'Authenticating…' : 'Log in'}</span>
+            </button>
+            <button type="button" onClick={goAccess} className="block mx-auto mt-4 text-[13px] text-t2 hover:text-accent-text transition-colors">
+              New here? <span className="text-accent-text font-medium">Initialize with access key</span>
             </button>
           </motion.form>
         )}
