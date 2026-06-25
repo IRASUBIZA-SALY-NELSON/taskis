@@ -232,11 +232,6 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
           <span className="flex-1 text-sm font-medium">Notes</span>
           <span className="text-[10.5px] text-t3">you</span>
         </button>
-        <button onClick={() => window.dispatchEvent(new Event('open-whats-new'))} className={itemCls(false)}>
-          <Sparkles className="w-[15px] h-[15px] flex-none text-t3" />
-          <span className="flex-1 text-sm font-medium">What’s new</span>
-          {newCount > 0 && <span className="min-w-[18px] h-[18px] px-1 grid place-items-center rounded-full bg-accent text-on-accent text-[10.5px] font-bold">{newCount}</span>}
-        </button>
 
         {favs.length > 0 && (
           <>
