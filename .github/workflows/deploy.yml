@@ -61,6 +61,8 @@ jobs:
 
                   if [ "$FRONTEND_CHANGED" = "true" ]; then
                     echo "==> Restart frontend (systemd)"
+                    sudo -n fuser -k 9091/tcp || true
+                    sleep 1
                     sudo -n systemctl restart taskis-frontend || echo "WARN: frontend restart needs passwordless sudo for 'systemctl restart taskis-frontend'"
                   fi
 

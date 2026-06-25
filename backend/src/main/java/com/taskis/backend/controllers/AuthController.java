@@ -50,6 +50,8 @@ public class AuthController {
 
     @Autowired
     private com.taskis.backend.security.BruteForceGuard bruteForce;
+
+    @Autowired
     private com.taskis.backend.services.AuditService auditService;
 
     @PostMapping("/access")
