@@ -62,16 +62,16 @@ jobs:
                   if [ "$FRONTEND_CHANGED" = "true" ]; then
                     echo "==> Restart frontend"
                     # Stop the service first so systemd doesn't race with fuser
-                    sudo -n systemctl stop taskis-frontend || true
+                    sudo -n systemctl stop taskis-frontend 2>/dev/null || true
                     # Kill anything still holding port 9091 (stale processes from previous runs)
-                    sudo -n fuser -k 9091/tcp || true
+                    sudo -n fuser -k 9091/tcp 2>/dev/null || true
                     # Give the OS time to release the port
                     sleep 2
                     # Start fresh
-                    sudo -n systemctl start taskis-frontend
+                    sudo -n systemctl start taskis-frontend 2>/dev/null || true
                     # Wait up to 15s for the port to come up
                     for i in $(seq 1 15); do
-                      sudo -n ss -tulpn | grep -q ':9091' && echo "frontend up after ${i}s" && break
+                      sudo -n ss -tulpn 2>/dev/null | grep -q ':9091' && echo "frontend up after ${i}s" && break
                       echo "  waiting... (${i}s)"
                       sleep 1
                     done
