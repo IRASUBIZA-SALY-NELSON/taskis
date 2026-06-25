@@ -60,14 +60,28 @@ jobs:
                   fi
 
                   if [ "$FRONTEND_CHANGED" = "true" ]; then
-                    echo "==> Restart frontend (systemd)"
+                    echo "==> Restart frontend"
+                    # Stop the service first so systemd doesn't race with fuser
+                    sudo -n systemctl stop taskis-frontend || true
+                    # Kill anything still holding port 9091 (stale processes from previous runs)
                     sudo -n fuser -k 9091/tcp || true
-                    sleep 1
-                    sudo -n systemctl restart taskis-frontend || echo "WARN: frontend restart needs passwordless sudo for 'systemctl restart taskis-frontend'"
+                    # Give the OS time to release the port
+                    sleep 2
+                    # Start fresh
+                    sudo -n systemctl start taskis-frontend
+                    # Wait up to 15s for the port to come up
+                    for i in $(seq 1 15); do
+                      sudo -n ss -tulpn | grep -q ':9091' && echo "frontend up after ${i}s" && break
+                      echo "  waiting... (${i}s)"
+                      sleep 1
+                    done
                   fi
 
                   echo "==> Health check"
-                  sleep 3
-                  curl -fsS -o /dev/null "http://127.0.0.1:9091" && echo "frontend OK (9091)" || echo "WARN: frontend health check failed"
-                  curl -fsS -o /dev/null "http://127.0.0.1:8080/api/posts" -H "Authorization: Bearer x" || true
+                  # Wait up to 30s for frontend to serve HTTP
+                  for i in $(seq 1 30); do
+                    curl -fsS -o /dev/null "http://127.0.0.1:9091" && echo "frontend healthy after ${i}s" && break
+                    sleep 1
+                  done
+                  curl -fsS -o /dev/null "http://127.0.0.1:8080/actuator/health" 2>/dev/null && echo "backend healthy" || true
                   echo "==> Done"
