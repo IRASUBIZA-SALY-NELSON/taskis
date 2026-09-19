@@ -14,6 +14,7 @@ import GlobalSearch from '@/components/GlobalSearch';
 import FeaturesPanel from '@/components/FeaturesPanel';
 import { initThemeWatcher } from '@/lib/theme';
 import { initAccent } from '@/lib/accent';
+import { apiUrl } from '@/lib/api';
 
 export default function AppShell({ initialChannel = 'general' }: { initialChannel?: string }) {
   const router = useRouter();
@@ -38,7 +39,7 @@ export default function AppShell({ initialChannel = 'general' }: { initialChanne
   useEffect(() => {
     try {
       if (localStorage.getItem('token') && !localStorage.getItem('fileToken')) {
-        fetch(`http://${window.location.hostname}:8080/api/auth/file-token`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
+        fetch(apiUrl('/api/auth/file-token'), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
           .then((r) => (r.ok ? r.json() : null))
           .then((d) => { if (d?.fileToken) { localStorage.setItem('fileToken', d.fileToken); setFileTokenReady((n) => n + 1); } })
           .catch(() => {});
@@ -60,7 +61,7 @@ export default function AppShell({ initialChannel = 'general' }: { initialChanne
   useEffect(() => {
     if (!user) return;
     const sendHeartbeat = () => {
-      fetch(`http://${window.location.hostname}:8080/api/chat/heartbeat`, {
+      fetch(apiUrl('/api/chat/heartbeat'), {
         method: 'POST',
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: document.hasFocus() ? 'ACTIVE' : 'AWAY' }),

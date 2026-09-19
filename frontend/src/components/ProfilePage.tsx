@@ -10,8 +10,7 @@ import { getNotifyPrefs, setNotifyPrefs, getDnd, setDnd, requestNotificationPerm
 import { getThemeMode, applyThemeMode, type ThemeMode } from '@/lib/theme';
 import { ACCENTS, getAccent, applyAccent } from '@/lib/accent';
 import { markFeature } from '@/lib/features';
-
-const api = (p: string) => `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:8080${p}`;
+import { apiUrl as api } from '@/lib/api';
 const authH = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
 const fullMedia = (u?: string) => (!u ? '' : withFileToken(u.startsWith('http') ? u : api(u)));
 

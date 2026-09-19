@@ -3,6 +3,7 @@
 import './global-shim'; // MUST be first — defines window.global before sockjs-client loads
 import { Client, type IMessage } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
+import { wsUrl } from './api';
 
 type Handler = (body: any) => void;
 
@@ -14,10 +15,6 @@ interface Registration {
 
 let client: Client | null = null;
 const registrations = new Set<Registration>();
-
-function wsUrl() {
-  return `http://${window.location.hostname}:8080/ws`;
-}
 
 function ensureClient(): Client {
   if (client) return client;

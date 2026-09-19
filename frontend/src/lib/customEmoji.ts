@@ -1,10 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { apiUrl as api } from './api';
 
 export interface CustomEmoji { id: number; name: string; url: string; createdBy?: string }
-
-const api = (p: string) => `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:8080${p}`;
 const withTok = (u: string) => {
   if (!u || !u.includes('/api/files/')) return u;
   let t = ''; try { t = localStorage.getItem('fileToken') || ''; } catch { /* noop */ }

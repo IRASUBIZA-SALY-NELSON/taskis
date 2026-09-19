@@ -8,8 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { initials, toneFor, displayOf } from './Sidebar';
 import { disconnectWs } from '@/lib/ws';
 import { useFocusTrap } from '@/lib/useFocusTrap';
-
-const api = (p: string) => `http://${window.location.hostname}:8080${p}`;
+import { apiUrl as api } from '@/lib/api';
 const CHANNELS = ['general', 'intel', 'alerts', 'confidential'];
 
 interface Cmd { id: string; label: string; hint?: string; icon: React.ReactNode; run: () => void; group: string }

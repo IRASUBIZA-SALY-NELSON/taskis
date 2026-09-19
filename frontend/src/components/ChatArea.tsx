@@ -24,10 +24,10 @@ import { Share2, Dices, Coins, PartyPopper, Sparkles, Heart, AtSign, Zap } from 
 import { plainText } from '@/lib/rich';
 import { confetti, emojiRain, runFunCommand, deservesConfetti, watchKonami, parseEffect } from '@/lib/fun';
 import { markFeature } from '@/lib/features';
+import { apiUrl as api } from '@/lib/api';
 
 interface ChatAreaProps { user: any; channel: string; onToggleSidebar: () => void; }
 
-const api = (path: string) => `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:8080${path}`;
 const authH = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' });
 
 export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaProps) {

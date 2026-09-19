@@ -3,8 +3,7 @@
 import React, { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { initials, toneFor, displayOf, defaultAvatarUrl, ringFor, withFileToken } from './Sidebar';
-
-const api = (p: string) => `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:8080${p}`;
+import { apiUrl as api } from '@/lib/api';
 const mediaUrl = (u?: string) => (!u ? '' : withFileToken(u.startsWith('http') ? u : api(u)));
 
 function presence(status?: string) {

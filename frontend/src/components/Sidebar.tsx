@@ -7,6 +7,7 @@ import ThemeToggle from './ThemeToggle';
 import SettingsMenu from './SettingsMenu';
 import { disconnectWs } from '@/lib/ws';
 import { markFeature, FEATURES, getDone, onFeatureChange } from '@/lib/features';
+import { apiUrl } from '@/lib/api';
 
 export function displayOf(u: any) {
   return (u?.displayName && u.displayName.trim()) || u?.username || '?';
@@ -58,7 +59,7 @@ export function withFileToken(url: string): string {
 /** Resolve a user's avatar URL, falling back to a generated default profile. */
 export function avatarFor(u: any) {
   const raw = u?.avatarUrl;
-  if (raw) return withFileToken(raw.startsWith('http') ? raw : `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:8080${raw}`);
+  if (raw) return withFileToken(raw.startsWith('http') ? raw : apiUrl(raw));
   return defaultAvatarUrl(u?.username || '?');
 }
 
@@ -95,7 +96,7 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
     });
   };
 
-  const api = (p: string) => `http://${window.location.hostname}:8080${p}`;
+  const api = apiUrl;
 
   React.useEffect(() => {
     if (activeChannel) {

@@ -5,8 +5,9 @@ import { Search, Plus, Upload } from 'lucide-react';
 import { EMOJI_GROUPS, searchEmoji } from '@/lib/emoji';
 import { useCustomEmojis, loadCustomEmojis } from '@/lib/customEmoji';
 
+import { apiUrl } from '@/lib/api';
+
 const GIPHY_KEY = process.env.NEXT_PUBLIC_GIPHY_KEY || 'dc6zaTOxFJmzC'; // public beta key
-const apiUrl = (p: string) => `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:8080${p}`;
 
 interface Props {
   onEmoji: (e: string) => void;

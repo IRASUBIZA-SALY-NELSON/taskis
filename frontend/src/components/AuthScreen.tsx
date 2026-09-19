@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ChevronLeft, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ThemeToggle from './ThemeToggle';
+import { apiUrl as api } from '@/lib/api';
 
 type Step = 'INIT' | 'SET_PASS' | 'LOGIN';
 
@@ -22,7 +23,7 @@ const copy: Record<Step, { eyebrow: string; title: string; subtitle: (u: string)
   LOGIN: {
     eyebrow: 'Welcome back',
     title: 'Log in',
-    subtitle: () => 'Enter your codename and passphrase to reconnect.',
+    subtitle: () => 'Enter your codename or email and passphrase to reconnect.',
   },
 };
 
@@ -34,8 +35,6 @@ export default function AuthScreen() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-
-  const api = (path: string) => `http://${window.location.hostname}:8080${path}`;
 
   const handleInitSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -207,7 +206,7 @@ export default function AuthScreen() {
               <input
                 type="text"
                 autoComplete="username"
-                placeholder="Codename"
+                placeholder="Codename or email"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="tk-input"
