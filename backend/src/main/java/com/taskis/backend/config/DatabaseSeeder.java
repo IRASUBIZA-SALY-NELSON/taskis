@@ -18,6 +18,10 @@ public class DatabaseSeeder implements CommandLineRunner {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    /**
+     * Ensures a local admin exists on every boot so the app is usable out of the box.
+     * Username: nelson. Override this in production rather than keeping the seed password.
+     */
     @Override
     public void run(String... args) throws Exception {
         Optional<User> nelsonOpt = userRepository.findByUsername("nelson");
