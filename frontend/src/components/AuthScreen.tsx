@@ -7,6 +7,16 @@ import { motion, AnimatePresence } from 'framer-motion';
 import ThemeToggle from './ThemeToggle';
 import { apiUrl as api } from '@/lib/api';
 
+async function readApiError(res: Response) {
+  const text = await res.text();
+  try {
+    const json = JSON.parse(text);
+    return json.error || json.message || text;
+  } catch {
+    return text || `Request failed (${res.status})`;
+  }
+}
+
 type Step = 'INIT' | 'SET_PASS' | 'LOGIN';
 
 const copy: Record<Step, { eyebrow: string; title: string; subtitle: (u: string) => string }> = {
@@ -46,7 +56,7 @@ export default function AuthScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw new Error(await readApiError(res));
       const data = await res.json();
       if (data.status === 'REQUIRES_PASSPHRASE') {
         setUsername(data.username);
@@ -74,7 +84,7 @@ export default function AuthScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, passphrase }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw new Error(await readApiError(res));
       const data = await res.json();
       if (data.status === 'AUTHENTICATED') {
         localStorage.setItem('token', data.token);
@@ -98,7 +108,7 @@ export default function AuthScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, passphrase }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw new Error(await readApiError(res));
       const data = await res.json();
       if (data.status === 'AUTHENTICATED') {
         localStorage.setItem('token', data.token);
