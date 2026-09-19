@@ -13,9 +13,9 @@ import LinkPreview, { firstUrl } from './LinkPreview';
 import { useCustomEmojis } from '@/lib/customEmoji';
 import { recordVisit } from '@/lib/streak';
 import { markFeature } from '@/lib/features';
+import { apiUrl as api } from '@/lib/api';
 
 const PAGE = 10;
-const api = (p: string) => `http://${window.location.hostname}:8080${p}`;
 const token = () => localStorage.getItem('token');
 const authJson = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` });
 const mediaUrl = (u?: string) => (!u ? '' : withFileToken(u.startsWith('http') ? u : api(u)));

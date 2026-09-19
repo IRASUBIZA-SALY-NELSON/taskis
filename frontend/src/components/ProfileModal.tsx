@@ -6,6 +6,7 @@ import { X, Camera } from 'lucide-react';
 import { initials, toneFor, defaultAvatarUrl, withFileToken } from './Sidebar';
 import { markFeature } from '@/lib/features';
 import { useFocusTrap } from '@/lib/useFocusTrap';
+import { apiUrl as api } from '@/lib/api';
 
 interface Props {
   user: any;
@@ -13,7 +14,6 @@ interface Props {
 }
 
 export default function ProfileModal({ user, onClose }: Props) {
-  const api = (p: string) => `http://${window.location.hostname}:8080${p}`;
   const [displayName, setDisplayName] = useState(user.displayName || '');
   const [bio, setBio] = useState(user.bio || '');
   const [customStatus, setCustomStatus] = useState(user.customStatus || '');

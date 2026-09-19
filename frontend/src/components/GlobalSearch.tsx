@@ -6,8 +6,7 @@ import { Search, Hash, MessageSquare, Bot } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { initials, toneFor, displayOf, withFileToken } from './Sidebar';
 import { useFocusTrap } from '@/lib/useFocusTrap';
-
-const api = (p: string) => `http://${window.location.hostname}:8080${p}`;
+import { apiUrl as api } from '@/lib/api';
 const mediaUrl = (u?: string) => (!u ? '' : withFileToken(u.startsWith('http') ? u : api(u)));
 
 function channelLabel(ch: string) {

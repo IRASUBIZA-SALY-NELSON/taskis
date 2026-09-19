@@ -108,7 +108,13 @@ public class AuthController {
                     .body("Too many attempts. Try again in " + secs + "s.");
         }
 
-        User user = userRepository.findByUsername(username).orElse(null);
+        String ident = username == null ? "" : username.trim();
+        User user = userRepository.findByUsername(ident).orElse(null);
+        if (user == null && ident.contains("@")) {
+            user = userRepository.findByEmail(ident).orElseGet(() -> userRepository.findAll().stream()
+                    .filter(u -> ident.equalsIgnoreCase(u.getEmail()))
+                    .findFirst().orElse(null));
+        }
         if (user != null && passwordEncoder.matches(passphrase, user.getPassword())) {
             if (Boolean.FALSE.equals(user.getActive())) {
                 bruteForce.onFailure(key); // deactivated: not a successful auth — keep counting

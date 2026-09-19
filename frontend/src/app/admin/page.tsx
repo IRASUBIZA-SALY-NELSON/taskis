@@ -10,9 +10,9 @@ import {
 import ThemeToggle from '../../components/ThemeToggle';
 import { displayOf, avatarFor, ringFor } from '../../components/Sidebar';
 import { useToast } from '../../components/Toast';
+import { apiUrl as api } from '@/lib/api';
 
 /* ── helpers ── */
-const api = (p: string) => `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:8080${p}`;
 const authH = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
 const authJ = () => ({ ...authH(), 'Content-Type': 'application/json' });
 const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—';

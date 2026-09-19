@@ -4,8 +4,7 @@ import { useEffect, useRef } from 'react';
 import { subscribe } from '@/lib/ws';
 import { initNotifications, requestNotificationPermission, showNotification, playPing, getNotifyPrefs, isMuted } from '@/lib/notify';
 import { displayOf } from './Sidebar';
-
-const api = (p: string) => `http://${window.location.hostname}:8080${p}`;
+import { apiUrl as api } from '@/lib/api';
 const NAMED = ['general', 'intel', 'alerts', 'confidential', 'taskis-bot'];
 
 /**
