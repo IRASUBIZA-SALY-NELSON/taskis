@@ -22,4 +22,4 @@ In the Vercel project: **Settings → General → Root Directory → Edit → `f
 
 If Root Directory is left at `.`, Vercel finishes in a few seconds with no Next.js build and `https://tasikisi.vercel.app/` returns 404.
 
-Production API is `https://taskis-api.onrender.com`. On Render set `MONGODB_URI` to the Atlas SRV URI (database name `taskis`). On Atlas Network Access allow `0.0.0.0/0` so Render can connect. Do not commit the URI.
+Production API is `https://taskis-api.onrender.com`. On Render set `MONGODB_URI` to the Atlas SRV URI (database name `taskis`) and Health Check Path to `/health`. On Atlas Network Access allow `0.0.0.0/0` so Render can connect. Do not commit the URI.
