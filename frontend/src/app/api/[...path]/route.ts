@@ -22,6 +22,13 @@ async function proxy(req: NextRequest, path: string[]) {
 
   try {
     const res = await fetch(dest, { method: req.method, headers, body, redirect: 'manual' });
+    const contentType = res.headers.get('content-type') || '';
+    if (res.status >= 502 || contentType.includes('text/html')) {
+      return NextResponse.json(
+        { error: `API at ${backend} returned ${res.status}. Confirm the Render service is Live and MONGODB_URI is set.` },
+        { status: res.status >= 400 ? res.status : 502 },
+      );
+    }
     const out = new Headers(res.headers);
     out.delete('content-encoding');
     return new NextResponse(res.body, { status: res.status, headers: out });

@@ -9,11 +9,16 @@ import { apiUrl as api } from '@/lib/api';
 
 async function readApiError(res: Response) {
   const text = await res.text();
+  if (res.status === 502 || res.status === 503 || /bad gateway|currently unavailable/i.test(text)) {
+    return 'The API is starting or cannot reach MongoDB. Wait about a minute, then try again. On Render, the service must be Live with MONGODB_URI set.';
+  }
   try {
     const json = JSON.parse(text);
     return json.error || json.message || text;
   } catch {
-    return text || `Request failed (${res.status})`;
+    const trimmed = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    if (trimmed.length > 160) return `Request failed (${res.status})`;
+    return trimmed || `Request failed (${res.status})`;
   }
 }
 

@@ -39,20 +39,28 @@ public class ScheduledTasks {
 
     @Scheduled(fixedRate = 5 * 60 * 1000)
     public void purgeExpiredPosts() {
-        Date cutoff = new Date(System.currentTimeMillis() - POST_TTL_MS);
-        List<Post> expired = postRepository.findByCreatedAtBefore(cutoff);
-        if (expired.isEmpty()) return;
-        for (Post p : expired) {
-            commentRepository.deleteByPostId(p.getId());
-            deleteUploadedImage(p.getImageUrl());
+        try {
+            Date cutoff = new Date(System.currentTimeMillis() - POST_TTL_MS);
+            List<Post> expired = postRepository.findByCreatedAtBefore(cutoff);
+            if (expired.isEmpty()) return;
+            for (Post p : expired) {
+                commentRepository.deleteByPostId(p.getId());
+                deleteUploadedImage(p.getImageUrl());
+            }
+            postRepository.deleteAll(expired);
+            System.out.println("[Taskis] Purged " + expired.size() + " expired post(s).");
+        } catch (Exception e) {
+            System.err.println("[Taskis] Post purge skipped: " + e.getMessage());
         }
-        postRepository.deleteAll(expired);
-        System.out.println("[Taskis] Purged " + expired.size() + " expired post(s).");
     }
 
     @Scheduled(fixedRate = 60 * 60 * 1000)
     public void purgeOldAuditLogs() {
-        Date cutoff = new Date(System.currentTimeMillis() - 24L * 60 * 60* 1000);
-        auditLogRepository.deleteByTimestampBefore(cutoff);
+        try {
+            Date cutoff = new Date(System.currentTimeMillis() - 24L * 60 * 60 * 1000);
+            auditLogRepository.deleteByTimestampBefore(cutoff);
+        } catch (Exception e) {
+            System.err.println("[Taskis] Audit purge skipped: " + e.getMessage());
+        }
     }
 }
