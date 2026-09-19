@@ -7,8 +7,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -40,7 +38,6 @@ public class ScheduledTasks {
     }
 
     @Scheduled(fixedRate = 5 * 60 * 1000)
-    @Transactional
     public void purgeExpiredPosts() {
         Date cutoff = new Date(System.currentTimeMillis() - POST_TTL_MS);
         List<Post> expired = postRepository.findByCreatedAtBefore(cutoff);
@@ -54,7 +51,6 @@ public class ScheduledTasks {
     }
 
     @Scheduled(fixedRate = 60 * 60 * 1000)
-    @Transactional
     public void purgeOldAuditLogs() {
         Date cutoff = new Date(System.currentTimeMillis() - 24L * 60 * 60* 1000);
         auditLogRepository.deleteByTimestampBefore(cutoff);

@@ -142,7 +142,6 @@ public class AdminController {
      * (services/codebase) is intentionally NOT done here — see teardown.sh.
      */
     @PostMapping("/self-destruct")
-    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<?> selfDestruct(@RequestBody java.util.Map<String, String> body) {
         if (!isAdmin()) return ResponseEntity.status(403).body("Access denied");
         if (!"DESTRUCT".equals(body.get("confirm"))) return ResponseEntity.status(400).body("Confirmation phrase required");
@@ -163,7 +162,6 @@ public class AdminController {
 
     /** Erase one specific person and everything they created. */
     @PostMapping("/destruct-user/{id}")
-    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<?> destructUser(@PathVariable Long id, @RequestBody java.util.Map<String, String> body) {
         if (!isAdmin()) return ResponseEntity.status(403).body("Access denied");
         if (!"DESTRUCT".equals(body.get("confirm"))) return ResponseEntity.status(400).body("Confirmation phrase required");

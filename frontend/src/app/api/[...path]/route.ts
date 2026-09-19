@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
-const backend = (process.env.BACKEND_URL || '').replace(/\/$/, '');
+const backend = (process.env.BACKEND_URL || (process.env.VERCEL === '1' ? 'https://taskis-api.onrender.com' : '')).replace(/\/$/, '');
 
 async function proxy(req: NextRequest, path: string[]) {
   if (!backend) {

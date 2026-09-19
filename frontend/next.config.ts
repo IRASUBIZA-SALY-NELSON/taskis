@@ -19,7 +19,7 @@ function isPrivateOrigin(url: string) {
 
 // Local dev can proxy to this machine. Vercel cannot — it rejects private
 // destinations with DNS_HOSTNAME_RESOLVED_PRIVATE.
-const backend = configured || (onVercel ? "" : "http://127.0.0.1:8080");
+const backend = configured || (onVercel ? "https://taskis-api.onrender.com" : "http://127.0.0.1:8080");
 const canProxy = Boolean(backend) && !(onVercel && isPrivateOrigin(backend));
 
 const nextConfig: NextConfig = {

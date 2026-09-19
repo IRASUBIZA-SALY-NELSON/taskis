@@ -1,28 +1,28 @@
 package com.taskis.backend.models;
 
-import jakarta.persistence.*;
 import lombok.Data;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.DBRef;
+import org.springframework.data.mongodb.core.mapping.Document;
+
 import java.util.Date;
 
 @Data
-@Entity
-@Table(name = "post_comments")
+@Document("comments")
 public class Comment {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne
-    @JoinColumn(name = "post_id")
-    private Post post;
+    private Long postId;
 
-    @ManyToOne
-    @JoinColumn(name = "author_id")
+    @DBRef
     private User author;
 
-    @Column(length = 2048)
     private String content;
 
-    @Temporal(TemporalType.TIMESTAMP)
     private Date createdAt = new Date();
+
+    public void setPost(Post post) {
+        this.postId = post == null ? null : post.getId();
+    }
 }

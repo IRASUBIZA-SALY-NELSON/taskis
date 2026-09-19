@@ -10,7 +10,6 @@ import com.taskis.backend.repositories.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
@@ -150,7 +149,6 @@ public class PostController {
     }
 
     @DeleteMapping("/{id}")
-    @Transactional
     public ResponseEntity<?> delete(@PathVariable Long id, Principal principal) {
         if (principal == null) return ResponseEntity.status(401).body("Unauthorized");
         Post p = postRepository.findById(id).orElse(null);

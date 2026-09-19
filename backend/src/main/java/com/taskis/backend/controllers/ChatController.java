@@ -290,10 +290,11 @@ public class ChatController {
 
     @GetMapping("/channels/latest")
     public ResponseEntity<Map<String, Date>> getLatestTimestamps() {
-        List<Object[]> results = messageRepository.findLatestTimestamps();
         Map<String, Date> map = new java.util.HashMap<>();
-        for (Object[] r : results) {
-            map.put((String) r[0], (Date) r[1]);
+        for (Message m : messageRepository.findAll()) {
+            if (m.getChannel() == null || m.getTimestamp() == null) continue;
+            Date prev = map.get(m.getChannel());
+            if (prev == null || m.getTimestamp().after(prev)) map.put(m.getChannel(), m.getTimestamp());
         }
         return ResponseEntity.ok(map);
     }
