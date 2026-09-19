@@ -1,11 +1,10 @@
 package com.taskis.backend.repositories;
 
 import com.taskis.backend.models.CustomEmoji;
-import org.springframework.data.jpa.repository.JpaRepository;
-import java.util.List;
+import org.springframework.data.mongodb.repository.MongoRepository;
 import java.util.Optional;
 
-public interface CustomEmojiRepository extends JpaRepository<CustomEmoji, Long> {
+public interface CustomEmojiRepository extends MongoRepository<CustomEmoji, Long> {
     Optional<CustomEmoji> findByName(String name);
-    List<CustomEmoji> findAllByOrderByNameAsc();
+    java.util.List<CustomEmoji> findAllByOrderByNameAsc();
 }

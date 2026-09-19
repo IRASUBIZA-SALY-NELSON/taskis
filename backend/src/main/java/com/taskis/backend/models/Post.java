@@ -1,38 +1,30 @@
 package com.taskis.backend.models;
 
-import jakarta.persistence.*;
 import lombok.Data;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.DBRef;
+import org.springframework.data.mongodb.core.mapping.Document;
+
 import java.util.Date;
 
 @Data
-@Entity
-@Table(name = "posts")
+@Document("posts")
 public class Post {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne
-    @JoinColumn(name = "author_id")
+    @DBRef
     private User author;
 
-    @Column(length = 1024)
     private String imageUrl;
 
-    @Column(length = 2048)
     private String caption;
 
-    // Comma-separated usernames who up-voted / down-voted the post.
-    @Column(length = 8192)
     private String likedBy = "";
 
-    @Column(length = 8192)
     private String dislikedBy = "";
 
-    // Emoji reactions, stored as "emoji:user1,user2;emoji2:user3".
-    @Column(length = 8192)
     private String reactions = "";
 
-    @Temporal(TemporalType.TIMESTAMP)
     private Date createdAt = new Date();
 }
