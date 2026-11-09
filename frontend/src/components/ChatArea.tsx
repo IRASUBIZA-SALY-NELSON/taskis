@@ -18,6 +18,7 @@ import { useCustomEmojis } from '@/lib/customEmoji';
 import { isMuted, toggleMute, playTick, playReaction } from '@/lib/notify';
 import { Bell, BellOff, ArrowDown, Bold, Italic, Code, Link as LinkIcon, Strikethrough, Flag } from 'lucide-react';
 import FilePreview, { PreviewAtt } from './FilePreview';
+import DocPreview from './DocPreview';
 import ShareModal from './ShareModal';
 import PollComposer from './PollComposer';
 import { Share2, Dices, Coins, PartyPopper, Sparkles, Heart, AtSign, Zap } from 'lucide-react';
@@ -994,23 +995,13 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     if (a.type.startsWith('audio/')) {
       return <VoiceNote src={full} mine={mine} />;
     }
-    return (
-      <div className="flex items-center gap-[11px] px-3 py-2.5 rounded-2xl border border-border w-[264px] max-w-full" style={{ background: 'var(--surface-2)' }}>
-        <button onClick={() => openPreview(a)} className="w-[34px] h-[34px] rounded-xl bg-surface-3 grid place-items-center flex-none text-t2 hover:text-t1 transition-colors" title="Preview"><FileText className="w-4 h-4" /></button>
-        <button onClick={() => openPreview(a)} className="flex-1 min-w-0 text-left">
-          <div className="text-[13.5px] font-medium text-t1 truncate hover:underline">{fileNameOf(a.url)}</div>
-          <div className="text-xs text-t3 uppercase">{a.type?.split('/')[1] || 'file'}</div>
-        </button>
-        <button onClick={() => openPreview(a)} className="icon-btn w-[30px] h-[30px] border-0" aria-label="Preview" title="Preview"><Eye className="w-[15px] h-[15px]" /></button>
-        <a href={dlHref(full)} download target="_blank" rel="noreferrer" className="icon-btn w-[30px] h-[30px] border-0" aria-label="Download" title="Download"><Download className="w-[15px] h-[15px]" /></a>
-      </div>
-    );
+    return <DocPreview url={full} type={a.type} name={fileNameOf(a.url)} downloadHref={dlHref(full)} onOpen={() => openPreview(a)} />;
   };
 
   const Attachment = ({ msg, mine }: { msg: any; mine: boolean }) => {
     const atts = parseAttachments(msg);
     if (!atts.length) return null;
-    if (atts.length === 1) return <AttachmentOne a={atts[0]} mine={mine} />;
+    if (atts.length === 1) return AttachmentOne({ a: atts[0], mine });
 
     const allImages = atts.every((a) => a.type.startsWith('image/'));
     return (
@@ -1024,7 +1015,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
             ))}
           </div>
         ) : (
-          atts.map((a, i) => <AttachmentOne key={i} a={a} mine={mine} />)
+          atts.map((a, i) => <React.Fragment key={i}>{AttachmentOne({ a, mine })}</React.Fragment>)
         )}
         <button onClick={() => downloadAll(atts)} className="flex items-center justify-center gap-2 w-full py-2 rounded-xl border border-border text-[12.5px] font-medium text-t2 hover:text-t1 hover:border-border-strong transition-colors" style={{ background: 'var(--surface-2)' }}>
           <Download className="w-[14px] h-[14px]" /> Download all · {atts.length} files
@@ -1049,7 +1040,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
             <span className="text-[11px] text-t3">{fmt(m.timestamp)}</span>
           </div>
           {m.content && <div className="text-[14px] text-t1 leading-relaxed whitespace-pre-wrap break-words mt-0.5">{m.deleted ? '[deleted]' : renderContent(m.content)}</div>}
-          {!m.deleted && <Attachment msg={m} mine={me} />}
+          {!m.deleted && Attachment({ msg: m, mine: me })}
         </div>
       </div>
     );
@@ -1460,7 +1451,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                           </div>
                         ); })()}
                         {!isDeleted && !msg.attachmentUrl && firstUrl(msg.content) && <LinkPreview url={firstUrl(msg.content)!} />}
-                        {!isDeleted && <Attachment msg={msg} mine={isMe} />}
+                        {!isDeleted && Attachment({ msg: msg, mine: isMe })}
                       </div>
 
                       {!isDeleted && !selectMode && (
