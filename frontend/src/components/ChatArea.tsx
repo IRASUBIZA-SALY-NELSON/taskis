@@ -27,7 +27,6 @@ import { plainText } from '@/lib/rich';
 import { confetti, emojiRain, runFunCommand, deservesConfetti, watchKonami, parseEffect } from '@/lib/fun';
 import { markFeature } from '@/lib/features';
 import { apiUrl as api } from '@/lib/api';
-import { ensureFreshToken } from '@/lib/session';
 
 interface ChatAreaProps { user: any; channel: string; onToggleSidebar: () => void; }
 

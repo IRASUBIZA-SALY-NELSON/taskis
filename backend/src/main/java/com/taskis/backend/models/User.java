@@ -53,10 +53,6 @@ public class User {
 
     private String customStatus;
 
-    /** Push notifications say who wrote, never what. Null counts as on. */
-    @JsonIgnore
-    private Boolean hidePushContent = true;
-
     private String ringColor;
 
     @JsonIgnore

@@ -5,7 +5,6 @@ import { subscribe } from '@/lib/ws';
 import { initNotifications, requestNotificationPermission, showNotification, playPing, getNotifyPrefs, isMuted } from '@/lib/notify';
 import { displayOf } from './Sidebar';
 import { apiUrl as api } from '@/lib/api';
-import { syncWebPush } from '@/lib/webpush';
 const NAMED = ['general', 'intel', 'alerts', 'confidential', 'taskis-bot'];
 
 /**
