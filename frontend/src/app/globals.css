@@ -410,6 +410,7 @@ svg.lucide {
 .icon-btn {
   display: grid;
   place-items: center;
+  flex: none;
   background: transparent;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -520,6 +521,65 @@ svg.lucide {
 }
 .tk-fx-slam { animation: tk-slam 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; transform-origin: center; }
 .tk-fx-gentle { animation: tk-gentle 0.7s ease both; }
+
+/* ---- conversation (mobile-first messenger) ---- */
+.tk-day-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 11px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--t3);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  white-space: nowrap;
+}
+.tk-bubble {
+  width: fit-content;
+  max-width: 100%;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+.tk-msg-actions {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 8;
+  white-space: nowrap;
+  transition: opacity 0.12s ease;
+}
+.tk-msg-actions-own { right: calc(100% + 6px); }
+.tk-msg-actions-other { left: calc(100% + 6px); }
+.group:hover .tk-msg-actions,
+.tk-msg-actions.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+@media (hover: none) {
+  .tk-msg-actions {
+    display: none;
+    position: static;
+    transform: none;
+    margin-top: 6px;
+  }
+  .tk-msg-actions.is-open { display: flex; }
+}
+.tk-composer-dock {
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+.tk-chat-pad {
+  padding-left: max(12px, env(safe-area-inset-left));
+  padding-right: max(12px, env(safe-area-inset-right));
+}
 
 .tk-spin { animation: tk-spin 0.7s linear infinite; }
 .tk-fade { animation: tk-fade 0.16s ease-out; }

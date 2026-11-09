@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Send, Paperclip, FileText, Download, Lock, Menu, X, AlertCircle, MessageSquare, MoreVertical, Reply, Pencil, Trash2, SmilePlus, CheckCheck, Search, Pin, Bookmark, BookmarkCheck, Mic, Square, Smile, Copy, Eye, FolderUp, KeyRound, CircleCheck, Circle, ListChecks } from 'lucide-react';
+import { Send, Paperclip, FileText, Download, Lock, Menu, X, AlertCircle, MessageSquare, MoreVertical, MoreHorizontal, Reply, Pencil, Trash2, SmilePlus, CheckCheck, Search, Pin, Bookmark, BookmarkCheck, Mic, Square, Smile, Copy, Eye, FolderUp, KeyRound, CircleCheck, Circle, ListChecks } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { initials, toneFor, displayOf, avatarFor, ringFor, withFileToken } from './Sidebar';
 import { subscribe, publish } from '@/lib/ws';
@@ -25,6 +25,7 @@ import { plainText } from '@/lib/rich';
 import { confetti, emojiRain, runFunCommand, deservesConfetti, watchKonami, parseEffect } from '@/lib/fun';
 import { markFeature } from '@/lib/features';
 import { apiUrl as api } from '@/lib/api';
+import { ensureFreshToken } from '@/lib/session';
 
 interface ChatAreaProps { user: any; channel: string; onToggleSidebar: () => void; }
 
@@ -77,6 +78,8 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   const [showSearch, setShowSearch] = useState(false);
   const [savedActive, setSavedActive] = useState(false);
   const [pinnedOpen, setPinnedOpen] = useState(false);
+  const [headerMore, setHeaderMore] = useState(false);
+  const [activeMsg, setActiveMsg] = useState<number | null>(null);
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
   const [highlightId, setHighlightId] = useState<number | null>(null);
   const [recording, setRecording] = useState(false);
@@ -254,7 +257,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     fetch(api(`/api/chat/messages/${channel}`), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
       .then((r) => {
         if (r.status === 403 && channel === 'confidential') { setConfidUnlocked(false); setLoading(false); return null; }
-        if (r.status === 401 || r.status === 403) { localStorage.clear(); window.location.href = '/'; return null; }
+        if (r.status === 401 || r.status === 403) { if (!localStorage.getItem('refreshToken')) { localStorage.clear(); window.location.href = '/'; } return null; }
         return r.json();
       })
       .then((d) => { if (d) { setMessages(d); setLoading(false); markChannelSeen(); } })
@@ -361,7 +364,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   useEffect(() => {
     const close = (e: MouseEvent) => {
       const t = e.target as HTMLElement;
-      if (!t.closest('[data-menu]')) { setMenuId(null); setEmojiId(null); }
+      if (!t.closest('[data-menu]')) { setMenuId(null); setEmojiId(null); setHeaderMore(false); setActiveMsg(null); }
     };
     document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
@@ -441,7 +444,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
   };
 
   const uploadWithProgress = (f: File): Promise<{ url: string; type: string }> =>
-    new Promise((resolve, reject) => {
+    ensureFreshToken().then(() => new Promise<{ url: string; type: string }>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open('POST', api('/api/chat/upload'));
       xhr.setRequestHeader('Authorization', `Bearer ${localStorage.getItem('token')}`);
@@ -456,7 +459,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
       fd.append('file', f);
       fd.append('channel', channel);
       xhr.send(fd);
-    });
+    }));
 
   const deliver = async (payload: any, tempId: string) => {
     try {
@@ -980,13 +983,13 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
     const full = toFull(a.url);
     if (a.type.startsWith('image/')) {
       return (
-        <button onClick={() => setBigImage(full)} className="block w-[282px] max-w-full rounded-[16px] overflow-hidden border border-border cursor-zoom-in hover:border-border-strong transition-colors p-0 bg-transparent shadow-[var(--shadow-sm)]">
+        <button onClick={() => setBigImage(full)} className="block w-full max-w-[282px] rounded-[16px] overflow-hidden border border-border cursor-zoom-in hover:border-border-strong transition-colors p-0 bg-transparent shadow-[var(--shadow-sm)]">
           <img src={full} alt="attachment" className="w-full max-h-[260px] object-cover block" />
         </button>
       );
     }
     if (a.type.startsWith('video/')) {
-      return <video src={full} controls className="w-[282px] max-w-full max-h-[260px] rounded-[16px] border border-border bg-black block" />;
+      return <video src={full} controls className="w-full max-w-[282px] max-h-[260px] rounded-[16px] border border-border bg-black block" />;
     }
     if (a.type.startsWith('audio/')) {
       return <VoiceNote src={full} mine={mine} />;
@@ -1011,7 +1014,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
 
     const allImages = atts.every((a) => a.type.startsWith('image/'));
     return (
-      <div className="w-[282px] max-w-full flex flex-col gap-2">
+      <div className="w-full max-w-[282px] flex flex-col gap-2">
         {allImages ? (
           <div className="grid grid-cols-2 gap-1.5">
             {atts.map((a, i) => (
@@ -1103,9 +1106,9 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
         </div>
       )}
       {/* header */}
-      <header className="flex items-center gap-[13px] px-[22px] h-[62px] flex-none border-b border-border">
-        <button onClick={onToggleSidebar} className="icon-btn w-8 h-8" aria-label="Toggle sidebar" title="Toggle sidebar"><Menu className="w-[15px] h-[15px]" /></button>
-        {isChannel && <span className="text-[22px] font-medium text-t3 leading-none">#</span>}
+      <header className="flex items-center gap-2.5 sm:gap-[13px] px-3 sm:px-[22px] tk-chat-pad h-[56px] sm:h-[62px] flex-none border-b border-border">
+        <button onClick={onToggleSidebar} className="icon-btn w-9 h-9 sm:w-8 sm:h-8" aria-label="Toggle sidebar" title="Toggle sidebar"><Menu className="w-[16px] h-[16px]" /></button>
+        {isChannel && <span className="text-[20px] sm:text-[22px] font-medium text-t3 leading-none">#</span>}
         {isBot && <span className="w-[30px] h-[30px] rounded-lg bg-accent-soft text-accent-text text-[13px] font-bold grid place-items-center flex-none">TB</span>}
         {isDm && (
           <button onClick={() => openProfile(dmPartner?.username)} disabled={!dmPartner} className="relative w-[30px] h-[30px] rounded-full grid place-items-center flex-none text-xs font-semibold text-white overflow-hidden hover:opacity-85 transition-opacity" style={{ background: dmPartner ? 'transparent' : toneFor(dmPartner?.username || channel) }}>
@@ -1115,9 +1118,9 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
         )}
         <div className="flex-1 min-w-0">
           {dmPartner ? (
-            <button onClick={() => openProfile(dmPartner.username)} className="text-[15.5px] font-semibold text-t1 leading-tight truncate hover:underline decoration-border block max-w-full text-left">{headerTitle}</button>
+            <button onClick={() => openProfile(dmPartner.username)} className="text-[15px] sm:text-[15.5px] font-semibold text-t1 leading-tight truncate hover:underline decoration-border block max-w-full text-left">{headerTitle}</button>
           ) : (
-            <div className="text-[15.5px] font-semibold text-t1 leading-tight truncate">{headerTitle}</div>
+            <div className="text-[15px] sm:text-[15.5px] font-semibold text-t1 leading-tight truncate">{headerTitle}</div>
           )}
           {isChannel ? (
             editingTopic ? (
@@ -1136,75 +1139,134 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
               </button>
             )
           ) : (
-            <div className="flex items-center gap-1.5 text-xs text-t2 mt-px"><Lock className="w-[11px] h-[11px]" />{headerSub}</div>
+            <div className="flex items-center gap-1.5 text-[11.5px] sm:text-xs text-t2 mt-px min-w-0">
+              <span className="w-1.5 h-1.5 rounded-full flex-none" style={{ background: headerSub === 'Active now' ? 'var(--online)' : 'var(--t3)' }} />
+              <span className="truncate">{headerSub}</span>
+            </div>
           )}
         </div>
 
-        <div className="flex items-center gap-1.5 flex-none">
-          {!isBot && (
-            <button
-              onClick={() => { toggleMute(channel); setMuteVer((v) => v + 1); }}
-              className="icon-btn w-8 h-8"
-              title={isMuted(channel) ? 'Unmute notifications' : 'Mute notifications'}
-              style={isMuted(channel) ? { color: 'var(--accent-text)' } : undefined}
-              data-mutever={muteVer}
-            >
-              {isMuted(channel) ? <BellOff className="w-[15px] h-[15px]" /> : <Bell className="w-[15px] h-[15px]" />}
-            </button>
-          )}
-          {showSearch && (
-            <input
-              autoFocus
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search messages…"
-              className="tk-input hidden sm:block"
-              style={{ width: 190, padding: '7px 12px', fontSize: 13 }}
-            />
-          )}
-          <button onClick={() => { setShowSearch((s) => !s); setSearch(''); setSavedActive(false); }} className="icon-btn w-8 h-8" title="Search">
+        <div className="flex items-center gap-1 sm:gap-1.5 flex-none">
+          <button onClick={() => { setShowSearch((s) => !s); setSearch(''); setSavedActive(false); }} className="icon-btn w-9 h-9 sm:w-8 sm:h-8" title="Search" style={showSearch ? { background: 'var(--accent-soft)', color: 'var(--accent-text)', borderColor: 'var(--accent-line)' } : undefined}>
             <Search className="w-[15px] h-[15px]" />
           </button>
 
-          <div className="relative" data-menu>
-            <button onClick={(e) => { e.stopPropagation(); setPinnedOpen((o) => !o); }} className="icon-btn w-8 h-8 relative" title="Pinned messages">
-              <Pin className="w-[15px] h-[15px]" />
-              {pinnedMsgs.length > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[15px] h-[15px] px-1 rounded-full bg-accent text-on-accent text-[9px] font-bold grid place-items-center">{pinnedMsgs.length}</span>
+          <div className="hidden sm:flex items-center gap-1.5">
+            {!isBot && (
+              <button
+                onClick={() => { toggleMute(channel); setMuteVer((v) => v + 1); }}
+                className="icon-btn w-8 h-8"
+                title={isMuted(channel) ? 'Unmute notifications' : 'Mute notifications'}
+                style={isMuted(channel) ? { color: 'var(--accent-text)' } : undefined}
+                data-mutever={muteVer}
+              >
+                {isMuted(channel) ? <BellOff className="w-[15px] h-[15px]" /> : <Bell className="w-[15px] h-[15px]" />}
+              </button>
+            )}
+            {showSearch && (
+              <input
+                autoFocus
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search messages…"
+                className="tk-input"
+                style={{ width: 190, padding: '7px 12px', fontSize: 13 }}
+              />
+            )}
+            <div className="relative" data-menu>
+              <button onClick={(e) => { e.stopPropagation(); setPinnedOpen((o) => !o); }} className="icon-btn w-8 h-8 relative" title="Pinned messages">
+                <Pin className="w-[15px] h-[15px]" />
+                {pinnedMsgs.length > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[15px] h-[15px] px-1 rounded-full bg-accent text-on-accent text-[9px] font-bold grid place-items-center">{pinnedMsgs.length}</span>
+                )}
+              </button>
+              {pinnedOpen && (
+                <div className="card absolute right-0 top-full mt-2 w-[300px] max-h-[340px] overflow-y-auto scroll z-50 py-1" style={{ boxShadow: 'var(--shadow-lg), var(--edge-hi)' }} onClick={(e) => e.stopPropagation()}>
+                  <div className="eyebrow px-3 py-2">Pinned</div>
+                  {pinnedMsgs.length === 0 ? (
+                    <div className="px-3 py-3 text-[13px] text-t3">No pinned messages yet.</div>
+                  ) : pinnedMsgs.map((m) => (
+                    <button key={m.id} onClick={() => scrollToMessage(m.id)} className="w-full text-left px-3 py-2 hover:bg-hover transition-colors">
+                      <div className="text-[12px] font-semibold text-t1">{m.sender?.username}</div>
+                      <div className="text-[12.5px] text-t2 truncate">{plainText(m.content) || 'Attachment'}</div>
+                    </button>
+                  ))}
+                </div>
               )}
+            </div>
+            <button onClick={() => { setSavedActive((a) => !a); setShowSearch(false); setSearch(''); }} className="icon-btn w-8 h-8" title="Saved messages" style={savedActive ? { background: 'var(--accent-soft)', color: 'var(--accent-text)', borderColor: 'var(--accent-line)' } : undefined}>
+              {savedActive ? <BookmarkCheck className="w-[15px] h-[15px]" /> : <Bookmark className="w-[15px] h-[15px]" />}
             </button>
-            {pinnedOpen && (
-              <div className="card absolute right-0 top-full mt-2 w-[300px] max-h-[340px] overflow-y-auto scroll z-50 py-1" style={{ boxShadow: 'var(--shadow-lg), var(--edge-hi)' }} onClick={(e) => e.stopPropagation()}>
-                <div className="eyebrow px-3 py-2">Pinned</div>
-                {pinnedMsgs.length === 0 ? (
-                  <div className="px-3 py-3 text-[13px] text-t3">No pinned messages yet.</div>
-                ) : pinnedMsgs.map((m) => (
-                  <button key={m.id} onClick={() => scrollToMessage(m.id)} className="w-full text-left px-3 py-2 hover:bg-hover transition-colors">
-                    <div className="text-[12px] font-semibold text-t1">{m.sender?.username}</div>
-                    <div className="text-[12.5px] text-t2 truncate">{plainText(m.content) || 'Attachment'}</div>
-                  </button>
-                ))}
-              </div>
+            {!isBot && (
+              <button onClick={() => { markFeature('share'); setShowShare(true); }} className="btn-accent h-8 px-3 text-[13px] ml-0.5" title="Share">
+                <Share2 className="w-[14px] h-[14px]" /><span>Share</span>
+              </button>
             )}
           </div>
 
-          <button onClick={() => { setSavedActive((a) => !a); setShowSearch(false); setSearch(''); }} className="icon-btn w-8 h-8" title="Saved messages" style={savedActive ? { background: 'var(--accent-soft)', color: 'var(--accent-text)', borderColor: 'var(--accent-line)' } : undefined}>
-            {savedActive ? <BookmarkCheck className="w-[15px] h-[15px]" /> : <Bookmark className="w-[15px] h-[15px]" />}
-          </button>
-
-          {!isBot && (
-            <button onClick={() => { markFeature('share'); setShowShare(true); }} className="btn-accent h-8 px-3 text-[13px] ml-0.5" title="Share">
-              <Share2 className="w-[14px] h-[14px]" />Share
+          <div className="relative sm:hidden" data-menu>
+            <button onClick={(e) => { e.stopPropagation(); setHeaderMore((o) => !o); }} className="icon-btn w-9 h-9" aria-label="More" title="More">
+              <MoreHorizontal className="w-[16px] h-[16px]" />
             </button>
-          )}
+            {headerMore && (
+              <div className="card absolute right-0 top-full mt-2 w-[220px] z-50 py-1" style={{ boxShadow: 'var(--shadow-lg), var(--edge-hi)' }} onClick={(e) => e.stopPropagation()}>
+                {!isBot && (
+                  <button onClick={() => { toggleMute(channel); setMuteVer((v) => v + 1); setHeaderMore(false); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[13px] text-t1 hover:bg-hover">
+                    {isMuted(channel) ? <BellOff className="w-[15px] h-[15px] text-t2" /> : <Bell className="w-[15px] h-[15px] text-t2" />}
+                    {isMuted(channel) ? 'Unmute' : 'Mute'}
+                  </button>
+                )}
+                <button onClick={() => { setPinnedOpen(true); setHeaderMore(false); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[13px] text-t1 hover:bg-hover">
+                  <Pin className="w-[15px] h-[15px] text-t2" />Pinned{pinnedMsgs.length ? ` (${pinnedMsgs.length})` : ''}
+                </button>
+                <button onClick={() => { setSavedActive((a) => !a); setShowSearch(false); setSearch(''); setHeaderMore(false); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[13px] text-t1 hover:bg-hover">
+                  {savedActive ? <BookmarkCheck className="w-[15px] h-[15px] text-accent-text" /> : <Bookmark className="w-[15px] h-[15px] text-t2" />}
+                  {savedActive ? 'All messages' : 'Saved'}
+                </button>
+                {!isBot && (
+                  <button onClick={() => { markFeature('share'); setShowShare(true); setHeaderMore(false); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[13px] text-t1 hover:bg-hover">
+                    <Share2 className="w-[15px] h-[15px] text-t2" />Share
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </header>
+      {showSearch && (
+        <div className="sm:hidden px-3 pb-2.5 pt-2 border-b border-border tk-chat-pad">
+          <input
+            autoFocus
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search this conversation…"
+            className="tk-input"
+            style={{ padding: '10px 12px', fontSize: 14 }}
+          />
+        </div>
+      )}
+      {pinnedOpen && (
+        <div className="sm:hidden mx-3 mt-2 card z-40 py-1 max-h-[240px] overflow-y-auto scroll" data-menu style={{ boxShadow: 'var(--shadow-md)' }}>
+          <div className="eyebrow px-3 py-2">Pinned</div>
+          {pinnedMsgs.length === 0 ? (
+            <div className="px-3 py-3 text-[13px] text-t3">No pinned messages yet.</div>
+          ) : pinnedMsgs.map((m) => (
+            <button key={m.id} onClick={() => { scrollToMessage(m.id); setPinnedOpen(false); }} className="w-full text-left px-3 py-2 hover:bg-hover transition-colors">
+              <div className="text-[12px] font-semibold text-t1">{m.sender?.username}</div>
+              <div className="text-[12.5px] text-t2 truncate">{plainText(m.content) || 'Attachment'}</div>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* messages */}
-      <div ref={scrollRef} onScroll={onScroll} className="scroll flex-1 overflow-y-auto px-[22px] pt-4 pb-2">
+      <div ref={scrollRef} onScroll={onScroll} className="scroll flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-[22px] tk-chat-pad pt-4 pb-3">
         {!loading && messages.length > 0 && (
-          <button onClick={() => { setUnlockErr(''); setShowUnlock(true); }} className="flex items-center justify-center gap-2 mx-auto mb-2 px-3.5 py-1.5 rounded-full bg-surface-2 border border-border text-[12px] text-t2 hover:text-t1 hover:border-border-strong transition-colors">
-            <Lock className="w-[12px] h-[12px]" />Older history is sealed · <span className="text-accent-text font-medium">unlock archive</span>
+          <button onClick={() => { setUnlockErr(''); setShowUnlock(true); }} className="flex items-center justify-center gap-1.5 flex-wrap mx-auto mb-3 px-3 py-1.5 rounded-full bg-surface-2 border border-border text-[11.5px] sm:text-[12px] text-t2 hover:text-t1 hover:border-border-strong transition-colors max-w-full">
+            <Lock className="w-[12px] h-[12px] flex-none" />
+            <span>Older history is sealed</span>
+            <span className="text-t3 hidden sm:inline">·</span>
+            <span className="text-accent-text font-medium">Unlock</span>
           </button>
         )}
 
@@ -1254,9 +1316,9 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
             return (
               <React.Fragment key={msg.id || idx}>
                 {showDivider && (
-                  <div className="flex items-center gap-3 my-[18px]">
+                  <div className="flex items-center gap-3 my-4">
                     <div className="flex-1 h-px bg-border" />
-                    <span className="eyebrow" style={{ letterSpacing: '0.04em' }}>{dividerLabel(msg.timestamp)}</span>
+                    <span className="tk-day-pill">{dividerLabel(msg.timestamp)}</span>
                     <div className="flex-1 h-px bg-border" />
                   </div>
                 )}
@@ -1271,7 +1333,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                 <motion.div
                   initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} data-mid={msg.id}
                   onClick={selectMode && selectable ? () => toggleSelect(msg.id) : undefined}
-                  className={`group flex gap-[11px] ${grouped ? 'mt-0.5' : 'mt-3.5'} ${isMe ? 'flex-row-reverse' : ''} transition-colors duration-500 rounded-xl px-1.5 -mx-1.5 ${selectMode && selectable ? 'cursor-pointer' : ''} ${selectMode && !selectable ? 'opacity-45' : ''}`}
+                  className={`group flex gap-2 sm:gap-[11px] ${grouped ? 'mt-0.5' : 'mt-3'} ${isMe ? 'flex-row-reverse' : ''} transition-colors duration-500 rounded-xl ${selectMode && selectable ? 'cursor-pointer' : ''} ${selectMode && !selectable ? 'opacity-45' : ''}`}
                   style={isSelected ? { background: 'var(--accent-soft)' } : highlightId === msg.id ? { background: 'var(--accent-soft)' } : undefined}
                 >
                   {/* selection checkbox */}
@@ -1297,14 +1359,16 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                     )
                   )}
 
-                  <div className={`min-w-0 max-w-[76%] flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                  <div className={`min-w-0 max-w-[min(82%,36rem)] flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
                     {/* meta */}
                     {!grouped && (
-                      <div className={`flex items-baseline gap-2 mb-1 ${isMe ? 'flex-row-reverse' : ''}`}>
-                        {isMe ? <span className="text-[13px] font-semibold text-t1">You</span> : <HoverCard user={msg.sender} onClick={() => openProfile(msg.sender?.username)} className="text-[13px] font-semibold text-t1 cursor-pointer hover:underline decoration-border">{displayOf(msg.sender)}</HoverCard>}
-                        <span className="text-[11px] text-t3" title={new Date(msg.timestamp).toLocaleString()}>{fmt(msg.timestamp)}</span>
-                        {msg.edited && !isDeleted && <span className="text-[11px] text-t3 italic">edited</span>}
-                        {msg.pinned && <Pin className="w-[11px] h-[11px] text-accent-text" />}
+                      <div className={`flex items-baseline gap-2 mb-1 max-w-full ${isMe ? 'flex-row-reverse' : ''}`}>
+                        {isMe
+                          ? <span className="hidden sm:inline text-[13px] font-semibold text-t1 whitespace-nowrap">You</span>
+                          : <HoverCard user={msg.sender} onClick={() => openProfile(msg.sender?.username)} className="text-[13px] font-semibold text-t1 cursor-pointer hover:underline decoration-border truncate">{displayOf(msg.sender)}</HoverCard>}
+                        <span className="text-[11px] text-t3 flex-none whitespace-nowrap" title={new Date(msg.timestamp).toLocaleString()}>{fmt(msg.timestamp)}</span>
+                        {msg.edited && !isDeleted && <span className="text-[11px] text-t3 italic flex-none">edited</span>}
+                        {msg.pinned && <Pin className="w-[11px] h-[11px] text-accent-text flex-none" />}
                       </div>
                     )}
 
@@ -1322,9 +1386,20 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                       </button>
                     )}
 
-                    {/* bubble + hover actions */}
-                    <div className={`flex items-center gap-1.5 ${isMe ? 'flex-row-reverse' : ''}`}>
-                      <div className={`relative flex flex-col gap-1.5 min-w-0 ${isMe ? 'items-end' : 'items-start'}`} onDoubleClick={() => doubleReact(msg)}>
+                    {/* bubble + hover actions (actions are overlay so they never squeeze text) */}
+                    <div className={`relative w-fit max-w-full ${isMe ? 'ml-auto' : ''}`}>
+                      <div
+                        className={`relative flex flex-col gap-1.5 min-w-0 max-w-full ${isMe ? 'items-end' : 'items-start'}`}
+                        onDoubleClick={() => doubleReact(msg)}
+                        onClick={(e) => {
+                          if (selectMode || isDeleted) return;
+                          if (typeof window !== 'undefined' && window.matchMedia('(hover: hover)').matches) return;
+                          e.stopPropagation();
+                          setActiveMsg(activeMsg === msg.id ? null : msg.id);
+                          setMenuId(null);
+                          setEmojiId(null);
+                        }}
+                      >
                         {heartId === msg.id && (
                           <motion.span
                             initial={{ scale: 0.2, opacity: 0, y: 0 }}
@@ -1378,8 +1453,8 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                           );
                         })() : (() => { const fx = isDeleted ? { effect: null, text: msg.content } : parseEffect(msg.content); return (msg.content || isDeleted) && (
                           <div
-                            className={`px-[14px] py-[9px] text-[14.5px] leading-relaxed whitespace-pre-wrap break-words ${isDeleted ? 'opacity-50 italic' : ''} ${fx.effect === 'slam' ? 'tk-fx-slam' : fx.effect === 'gentle' ? 'tk-fx-gentle' : ''}`}
-                            style={{ background: isMe ? 'var(--bubble-own)' : 'var(--bubble-other)', color: isMe ? 'var(--bubble-own-text)' : 'var(--bubble-other-text)', borderRadius: isMe ? '20px 7px 20px 20px' : '7px 20px 20px 20px' }}
+                            className={`tk-bubble px-3.5 py-2 sm:px-[14px] sm:py-[9px] text-[15px] sm:text-[14.5px] leading-[1.45] ${isDeleted ? 'opacity-50 italic' : ''} ${fx.effect === 'slam' ? 'tk-fx-slam' : fx.effect === 'gentle' ? 'tk-fx-gentle' : ''}`}
+                            style={{ background: isMe ? 'var(--bubble-own)' : 'var(--bubble-other)', color: isMe ? 'var(--bubble-own-text)' : 'var(--bubble-other-text)', borderRadius: isMe ? '18px 18px 6px 18px' : '18px 18px 18px 6px' }}
                           >
                             {msg.content ? (isDeleted ? msg.content : (searchActive ? highlight(fx.text, search.trim()) : renderContent(fx.text))) : msg.content}
                           </div>
@@ -1389,7 +1464,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                       </div>
 
                       {!isDeleted && !selectMode && (
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div data-menu className={`tk-msg-actions ${isMe ? 'tk-msg-actions-own' : 'tk-msg-actions-other'} ${menuId === msg.id || emojiId === msg.id || activeMsg === msg.id ? 'is-open' : ''}`}>
                           {/* quick reactions */}
                           {['👍', '❤️', '😂'].map((em) => (
                             <button key={em} onClick={() => react(msg.id, em)} className="w-[26px] h-[26px] grid place-items-center rounded-lg bg-surface-2 border border-border hover:border-border-strong text-[14px] transition-colors" title={`React ${em}`}>{em}</button>
@@ -1466,7 +1541,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                             })}
                           </span>
                           <span className="text-[12.5px] font-medium text-accent-text">{tr.length} {tr.length === 1 ? 'reply' : 'replies'}</span>
-                          <span className="text-[11.5px] text-t3">Last reply {fmt(lastAt)}</span>
+                          <span className="text-[11.5px] text-t3 hidden sm:inline">Last reply {fmt(lastAt)}</span>
                           <ArrowDown className="w-3 h-3 text-t3 -rotate-90" />
                         </button>
                       );
@@ -1486,9 +1561,10 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                           ) : msg._failed ? (
                             <button onClick={() => retrySend(msg)} className="text-danger hover:underline">Failed · retry</button>
                           ) : (
-                            <span className="flex items-center gap-1 text-t3" title={readers.map(nameOf).join(', ')}>
-                              <CheckCheck className="w-3 h-3" style={readers.length ? { color: 'var(--accent-text)' } : undefined} />
-                              {label}
+                            <span className="flex items-center gap-1 text-t3 whitespace-nowrap" title={readers.map(nameOf).join(', ')}>
+                              <CheckCheck className="w-3 h-3 flex-none" style={readers.length ? { color: 'var(--accent-text)' } : undefined} />
+                              <span className="hidden sm:inline">{label}</span>
+                              <span className="sm:hidden">{readers.length ? 'Seen' : 'Sent'}</span>
                             </span>
                           )}
                         </div>
@@ -1545,7 +1621,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
           <Lock className="w-[14px] h-[14px]" />Taskis Bot is read-only — replies are automated.
         </div>
       ) : (
-        <div className="px-[22px] pt-[13px] pb-[18px] flex-none border-t border-border space-y-2">
+        <div className="px-3 sm:px-[22px] tk-chat-pad tk-composer-dock pt-2.5 sm:pt-[13px] flex-none border-t border-border space-y-2">
           {replyTo && (
             <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-surface-2 border border-border text-xs">
               <div className="flex items-center gap-2 text-t2 min-w-0">
@@ -1614,7 +1690,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                   </div>
                 </div>
               )}
-              <div className="flex items-center gap-2 px-1 pb-2">
+              <div className="hidden sm:flex items-center gap-2 px-1 pb-2">
                 <div className="inline-flex items-center gap-0.5 rounded-[12px] border border-border bg-surface-2 p-1">
                   <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => wrapSelection('**')} className={fmtBtn} title="Bold (⌘B)"><Bold className="w-[14px] h-[14px]" /></button>
                   <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => wrapSelection('_')} className={fmtBtn} title="Italic (⌘I)"><Italic className="w-[14px] h-[14px]" /></button>
@@ -1625,7 +1701,7 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                 </div>
                 <span className="text-[11px] text-t3 hidden sm:block">Select text, then format · or type <span className="tk-icode">/</span> for commands</span>
               </div>
-              <form onSubmit={send} className="relative flex items-end gap-1.5 rounded-[22px] border border-border-strong bg-surface-2 p-1.5">
+              <form onSubmit={send} className="relative flex items-end gap-1 rounded-[22px] border border-border-strong bg-surface-2 p-1.5">
                 {slashQuery !== null && slashMatches.length > 0 && (
                   <div className="card tk-pop absolute bottom-full mb-2 left-0 w-[296px] py-1.5 z-50" style={{ boxShadow: 'var(--shadow-lg)' }}>
                     <div className="eyebrow px-3 pb-1.5 pt-1">Commands</div>
@@ -1681,11 +1757,11 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                     ))}
                   </div>
                 )}
-                <label className="icon-btn w-[34px] h-[34px] border-0 cursor-pointer" title="Attach files">
+                <label className="icon-btn w-9 h-9 sm:w-[34px] sm:h-[34px] border-0 cursor-pointer flex-none" title="Attach files">
                   <Paperclip className="w-[18px] h-[18px]" />
                   <input type="file" multiple className="hidden" onChange={(e) => { addFiles(e.target.files); e.currentTarget.value = ''; }} />
                 </label>
-                <label className="icon-btn w-[34px] h-[34px] border-0 cursor-pointer" title="Upload a folder">
+                <label className="icon-btn w-[34px] h-[34px] border-0 cursor-pointer max-sm:!hidden" title="Upload a folder">
                   <FolderUp className="w-[18px] h-[18px]" />
                   <input
                     type="file"
@@ -1695,16 +1771,16 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
                     onChange={(e) => { addFiles(e.target.files); e.currentTarget.value = ''; }}
                   />
                 </label>
-                <button type="button" onClick={startRec} className="icon-btn w-[34px] h-[34px] border-0" title="Record voice note"><Mic className="w-[18px] h-[18px]" /></button>
-                <button type="button" onClick={() => setShowPollComposer(true)} className="icon-btn w-[34px] h-[34px] border-0" title="Create a poll"><ListChecks className="w-[18px] h-[18px]" /></button>
-                <div className="relative" data-menu>
-                  <button type="button" onClick={(e) => { e.stopPropagation(); setShowComposerPicker((s) => !s); }} className="icon-btn w-[34px] h-[34px] border-0" title="Emoji & GIFs"><Smile className="w-[18px] h-[18px]" /></button>
+                <button type="button" onClick={startRec} className="icon-btn w-9 h-9 sm:w-[34px] sm:h-[34px] border-0 flex-none" title="Record voice note"><Mic className="w-[18px] h-[18px]" /></button>
+                <button type="button" onClick={() => setShowPollComposer(true)} className="icon-btn w-[34px] h-[34px] border-0 max-sm:!hidden" title="Create a poll"><ListChecks className="w-[18px] h-[18px]" /></button>
+                <div className="relative flex-none" data-menu>
+                  <button type="button" onClick={(e) => { e.stopPropagation(); setShowComposerPicker((s) => !s); }} className="icon-btn w-9 h-9 sm:w-[34px] sm:h-[34px] border-0" title="Emoji & GIFs"><Smile className="w-[18px] h-[18px]" /></button>
                   {showComposerPicker && (
                     <EmojiGifPicker onEmoji={insertEmoji} onGif={sendGif} onClose={() => setShowComposerPicker(false)} />
                   )}
                 </div>
-                <textarea ref={taRef} rows={1} value={input} onPaste={onPaste} onChange={(e) => { const v = e.target.value; const p = e.target.selectionStart ?? v.length; setInput(v); autoGrow(); notifyTyping(); detectMention(v, p); detectColon(v, p); detectSlash(v, p); try { if (v) localStorage.setItem(`draft_${channel}`, v); else localStorage.removeItem(`draft_${channel}`); } catch { /* ignore */ } }} onKeyDown={onComposerKey} placeholder={`Message ${isChannel ? '#' + channel : headerTitle}`} className="scroll flex-1 min-w-0 bg-transparent border-0 outline-none resize-none text-[14.5px] leading-relaxed text-t1 px-1 py-2 max-h-[140px]" />
-                <button type="submit" disabled={(!input.trim() && files.length === 0) || uploading} aria-label="Send" className="btn-accent w-[36px] h-[36px] rounded-full flex-none">
+                <textarea ref={taRef} rows={1} value={input} onPaste={onPaste} onChange={(e) => { const v = e.target.value; const p = e.target.selectionStart ?? v.length; setInput(v); autoGrow(); notifyTyping(); detectMention(v, p); detectColon(v, p); detectSlash(v, p); try { if (v) localStorage.setItem(`draft_${channel}`, v); else localStorage.removeItem(`draft_${channel}`); } catch { /* ignore */ } }} onKeyDown={onComposerKey} placeholder={isChannel ? `Message #${channel}` : `Message ${headerTitle}`} className="scroll flex-1 min-w-0 bg-transparent border-0 outline-none resize-none text-[16px] sm:text-[14.5px] leading-relaxed text-t1 px-1.5 py-2 max-h-[140px]" />
+                <button type="submit" disabled={(!input.trim() && files.length === 0) || uploading} aria-label="Send" className="btn-accent w-9 h-9 sm:w-[36px] sm:h-[36px] rounded-full flex-none">
                   {uploading ? <span className="w-[15px] h-[15px] rounded-full border-2 border-white/35 border-t-white tk-spin" /> : <Send className="w-[17px] h-[17px]" />}
                 </button>
               </form>
