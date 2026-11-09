@@ -112,10 +112,10 @@ public class TaskisSharePlugin extends Plugin {
                 File root = new File(getContext().getCacheDir(), DIR).getCanonicalFile();
                 if (!file.getPath().startsWith(root.getPath() + File.separator) || !file.isFile()) { call.reject("Not a shared file"); return; }
 
-                // Only talk to the server this app is showing; never send the login token anywhere else.
-                String serverHost = new URI(getBridge().getServerUrl() != null ? getBridge().getServerUrl() : getBridge().getAppUrl()).getHost();
+                // Only talk to the server this app is showing (or a host the app is configured to allow, such as the
+                // API server); never send the login token anywhere else.
                 URL target = new URL(url);
-                if (serverHost == null || !serverHost.equalsIgnoreCase(target.getHost()) || !target.getProtocol().startsWith("http")) {
+                if (!target.getProtocol().startsWith("http") || !hostAllowed(target.getHost())) {
                     call.reject("Refusing to upload to " + target.getHost());
                     return;
                 }
@@ -152,6 +152,24 @@ public class TaskisSharePlugin extends Plugin {
                 call.reject("Upload failed: " + e.getMessage());
             }
         }, "taskis-share-upload").start();
+    }
+
+    /** The app's own server, or a host listed in allowNavigation in the Capacitor config (exact name or "*.example.com"). */
+    private boolean hostAllowed(String host) {
+        if (host == null) return false;
+        try {
+            String serverUrl = getBridge().getServerUrl() != null ? getBridge().getServerUrl() : getBridge().getAppUrl();
+            String serverHost = new URI(serverUrl).getHost();
+            if (serverHost != null && serverHost.equalsIgnoreCase(host)) return true;
+        } catch (Exception ignored) { /* fall through to the allow list */ }
+        String[] allowed = getBridge().getConfig().getAllowNavigation();
+        if (allowed == null) return false;
+        for (String a : allowed) {
+            if (a == null) continue;
+            if (a.equalsIgnoreCase(host)) return true;
+            if (a.startsWith("*.") && host.toLowerCase().endsWith(a.substring(1).toLowerCase())) return true;
+        }
+        return false;
     }
 
     // ---- helpers ----
