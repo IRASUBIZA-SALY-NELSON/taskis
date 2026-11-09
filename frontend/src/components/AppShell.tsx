@@ -14,6 +14,11 @@ import GlobalSearch from '@/components/GlobalSearch';
 import { initThemeWatcher } from '@/lib/theme';
 import { initAccent } from '@/lib/accent';
 import { apiUrl } from '@/lib/api';
+import '@/lib/session';
+import { initPush, markSeen } from '@/lib/push';
+import { syncWebPush } from '@/lib/webpush';
+import CallManager from '@/components/CallManager';
+import ShareTarget from '@/components/ShareTarget';
 
 export default function AppShell({ initialChannel = 'general' }: { initialChannel?: string }) {
   const router = useRouter();
@@ -83,7 +88,7 @@ export default function AppShell({ initialChannel = 'general' }: { initialChanne
   // keep-alive); the server announces presence to everyone else the moment it changes.
   useEffect(() => {
     if (!user) return;
-    const sendHeartbeat = () => {
+    const beat = () => {
       fetch(apiUrl('/api/chat/heartbeat'), {
         method: 'POST',
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },

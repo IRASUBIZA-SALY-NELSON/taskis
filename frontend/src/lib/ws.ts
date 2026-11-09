@@ -4,6 +4,7 @@ import './global-shim'; // MUST be first — defines window.global before sockjs
 import { Client, type IMessage } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 import { wsUrl } from './api';
+import { ensureFreshToken } from './session';
 
 type Handler = (body: any) => void;
 
@@ -16,6 +17,12 @@ interface Registration {
 let client: Client | null = null;
 const registrations = new Set<Registration>();
 const connectListeners = new Set<() => void>();
+
+/** Run something each time the live connection is (re)established, e.g. to catch up on what was missed while offline. */
+export function onWsConnect(cb: () => void): () => void {
+  connectListeners.add(cb);
+  return () => { connectListeners.delete(cb); };
+}
 
 function ensureClient(): Client {
   if (client) return client;

@@ -6,6 +6,7 @@ import { ChevronLeft, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ThemeToggle from './ThemeToggle';
 import { apiUrl as api } from '@/lib/api';
+import { saveSession } from '@/lib/session';
 
 async function readApiError(res: Response) {
   const text = await res.text();
@@ -50,6 +51,13 @@ export default function AuthScreen() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+
+  // Already signed in on this device: go straight to the app, no login screen.
+  useEffect(() => {
+    if (localStorage.getItem('user') && (localStorage.getItem('refreshToken') || localStorage.getItem('token'))) {
+      router.replace('/feed');
+    }
+  }, [router]);
 
   const handleInitSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
