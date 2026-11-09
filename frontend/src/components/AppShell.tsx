@@ -16,6 +16,7 @@ import { initAccent } from '@/lib/accent';
 import { apiUrl } from '@/lib/api';
 import '@/lib/session';
 import { initPush, markSeen } from '@/lib/push';
+import { syncWebPush } from '@/lib/webpush';
 import CallManager from '@/components/CallManager';
 
 export default function AppShell({ initialChannel = 'general' }: { initialChannel?: string }) {
@@ -37,7 +38,19 @@ export default function AppShell({ initialChannel = 'general' }: { initialChanne
   useEffect(() => { initAccent(); return initThemeWatcher(); }, []);
 
   // Push alerts (native app only): register this phone, and tell the server which conversation is being read.
-  useEffect(() => { if (user) initPush(); }, [user]);
+  useEffect(() => { if (user) { initPush(); syncWebPush(); } }, [user]);
+
+  // A clicked desktop notification: ?c=<channel> when it opened a new tab, or a message from the service worker when the app was already open.
+  useEffect(() => {
+    const c = new URLSearchParams(window.location.search).get('c');
+    if (c) setActiveChannel(c);
+    const onMsg = (e: MessageEvent) => {
+      if (e.data?.type === 'open-channel' && e.data.channel) window.dispatchEvent(new CustomEvent('open-channel', { detail: e.data.channel }));
+      if (e.data?.type === 'check-call') document.dispatchEvent(new Event('visibilitychange'));
+    };
+    navigator.serviceWorker?.addEventListener('message', onMsg);
+    return () => navigator.serviceWorker?.removeEventListener('message', onMsg);
+  }, []);
   useEffect(() => {
     if (!user) return;
     markSeen(activeChannel);

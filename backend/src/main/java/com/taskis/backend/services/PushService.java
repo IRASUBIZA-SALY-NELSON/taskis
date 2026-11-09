@@ -16,6 +16,7 @@ import com.taskis.backend.models.User;
 import com.taskis.backend.repositories.DeviceTokenRepository;
 import com.taskis.backend.repositories.PushUnreadRepository;
 import com.taskis.backend.repositories.UserRepository;
+import com.taskis.backend.repositories.WebSubscriptionRepository;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -47,6 +48,8 @@ public class PushService {
     @Autowired private UserRepository userRepository;
     @Autowired private DeviceTokenRepository deviceTokens;
     @Autowired private PushUnreadRepository unread;
+    @Autowired private WebSubscriptionRepository webSubs;
+    @Autowired private WebPushSender webPush;
 
     private FirebaseMessaging fcm;
     private final ExecutorService pool = Executors.newFixedThreadPool(2);
@@ -74,9 +77,13 @@ public class PushService {
         return fcm != null;
     }
 
+    private boolean anyChannelEnabled() {
+        return fcm != null || webPush.enabled();
+    }
+
     /** Fire and forget: never slows down or breaks sending the message itself. */
     public void notifyNewMessage(Message m) {
-        if (!enabled() || m == null || m.getSender() == null) return;
+        if (!anyChannelEnabled() || m == null || m.getSender() == null) return;
         pool.submit(() -> {
             try {
                 send(m);
@@ -88,9 +95,12 @@ public class PushService {
 
     /** Ring the callee's phones. Nothing about the call beyond who and whether it is video. */
     public void notifyIncomingCall(String username, String callerName, boolean video, String callId, String channel) {
-        if (!enabled()) return;
+        if (!anyChannelEnabled()) return;
         pool.submit(() -> {
-            for (DeviceToken t : deviceTokens.findByUsername(username)) {
+            for (var b : webPush.enabled() ? webSubs.findByUsername(username) : List.<com.taskis.backend.models.WebSubscription>of()) {
+                webPush.send(b, callerName, video ? "Incoming video call" : "Incoming voice call", "call", channel, 0, "call");
+            }
+            for (DeviceToken t : fcm == null ? List.<DeviceToken>of() : deviceTokens.findByUsername(username)) {
                 try {
                     fcm.send(com.google.firebase.messaging.Message.builder()
                             .setToken(t.getToken())
@@ -154,8 +164,9 @@ public class PushService {
                     && now - r.getLastHeartbeat().getTime() < ACTIVE_WINDOW_MS;
             if (viewingNow) continue;
 
-            List<DeviceToken> tokens = deviceTokens.findByUsername(r.getUsername());
-            if (tokens.isEmpty()) continue;
+            List<DeviceToken> tokens = fcm == null ? List.of() : deviceTokens.findByUsername(r.getUsername());
+            List<com.taskis.backend.models.WebSubscription> browsers = webPush.enabled() ? webSubs.findByUsername(r.getUsername()) : List.of();
+            if (tokens.isEmpty() && browsers.isEmpty()) continue;
 
             PushUnread u = unread.findByUsernameAndChannel(r.getUsername(), channel).orElseGet(() -> {
                 PushUnread n = new PushUnread();
@@ -169,6 +180,8 @@ public class PushService {
 
             boolean hide = !Boolean.FALSE.equals(r.getHidePushContent());
             PushText.Text text = PushText.build(channel, senderName, u.getCount(), hide, m.getContent(), hasAttachment);
+
+            for (var b : browsers) webPush.send(b, text.title(), text.body(), channel, channel, total, "message");
 
             for (DeviceToken t : tokens) {
                 try {

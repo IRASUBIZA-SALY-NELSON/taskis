@@ -8,6 +8,7 @@ import { getThemeMode, applyThemeMode, type ThemeMode } from '@/lib/theme';
 import { ACCENTS, getAccent, applyAccent } from '@/lib/accent';
 import { markFeature } from '@/lib/features';
 import { apiUrl } from '@/lib/api';
+import { enableWebPush } from '@/lib/webpush';
 
 function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
   return (
@@ -78,7 +79,7 @@ export default function SettingsMenu() {
   const enableDesktop = async () => {
     const ok = await requestNotificationPermission();
     setGranted(ok);
-    if (ok) update({ desktop: true });
+    if (ok) { update({ desktop: true }); enableWebPush(); }
   };
 
   return (

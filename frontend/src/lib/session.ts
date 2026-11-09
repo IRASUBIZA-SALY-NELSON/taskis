@@ -1,6 +1,7 @@
 'use client';
 
 import { apiBase, apiUrl } from './api';
+import { forgetWebPush } from './webpush';
 
 // A device signs in once and stays signed in: the short-lived session token is renewed
 // from a long-lived refresh token, so nobody sees the login screen again until they log out
@@ -76,6 +77,7 @@ export function logout() {
   const refreshToken = localStorage.getItem('refreshToken');
   const pushToken = localStorage.getItem('pushToken');
   const accessToken = localStorage.getItem('token');
+  forgetWebPush(); // before the token is cleared, so the server accepts the request
   if (pushToken && accessToken && rawFetch) {
     rawFetch(apiUrl('/api/push/unregister'), {
       method: 'POST',

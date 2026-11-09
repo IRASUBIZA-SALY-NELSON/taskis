@@ -5,6 +5,7 @@ import { subscribe } from '@/lib/ws';
 import { initNotifications, requestNotificationPermission, showNotification, playPing, getNotifyPrefs, isMuted } from '@/lib/notify';
 import { displayOf } from './Sidebar';
 import { apiUrl as api } from '@/lib/api';
+import { syncWebPush } from '@/lib/webpush';
 const NAMED = ['general', 'intel', 'alerts', 'confidential', 'taskis-bot'];
 
 /**
@@ -19,7 +20,7 @@ export default function NotificationManager({ user }: { user: any }) {
 
   useEffect(() => {
     initNotifications();
-    requestNotificationPermission();
+    requestNotificationPermission().then((ok) => { if (ok) syncWebPush(); });
 
     const offs: Array<() => void> = [];
     const mentionsMe = (t: string) =>
@@ -47,7 +48,8 @@ export default function NotificationManager({ user }: { user: any }) {
       if (document.hidden) {
         unread.current += 1;
         document.title = `(${unread.current}) Taskis`;
-        if (prefs.desktop) {
+        // When real push is on, the server already sends this (and honours "hide message text"), so skip the in-page copy.
+        if (prefs.desktop && localStorage.getItem('webPush') !== '1') {
           const n = unread.current;
           showNotification(
             n > 1 ? `Taskis · ${n} new messages` : (mention ? `${name} mentioned you` : name),
