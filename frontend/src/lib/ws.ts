@@ -16,6 +16,13 @@ interface Registration {
 
 let client: Client | null = null;
 const registrations = new Set<Registration>();
+const connectListeners = new Set<() => void>();
+
+/** Run something each time the live connection is (re)established, e.g. to catch up on what was missed while offline. */
+export function onWsConnect(cb: () => void): () => void {
+  connectListeners.add(cb);
+  return () => { connectListeners.delete(cb); };
+}
 
 function ensureClient(): Client {
   if (client) return client;
@@ -37,6 +44,7 @@ function ensureClient(): Client {
           reg.handler(body);
         });
       });
+      connectListeners.forEach((cb) => { try { cb(); } catch { /* one listener must not break the rest */ } });
     },
   });
   client.activate();

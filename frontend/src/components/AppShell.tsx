@@ -84,18 +84,23 @@ export default function AppShell({ initialChannel = 'general' }: { initialChanne
     return () => { window.removeEventListener('open-profile', openProfile); window.removeEventListener('open-channel', openChannel); };
   }, []);
 
+  // Tell the server whether the app is in front of the person. It reports when that changes (and every 20s as a
+  // keep-alive); the server announces presence to everyone else the moment it changes.
   useEffect(() => {
     if (!user) return;
-    const sendHeartbeat = () => {
+    const beat = () => {
       fetch(apiUrl('/api/chat/heartbeat'), {
         method: 'POST',
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: document.hasFocus() ? 'ACTIVE' : 'AWAY' }),
+        body: JSON.stringify({ status: document.hasFocus() && document.visibilityState === 'visible' ? 'ACTIVE' : 'AWAY' }),
       }).catch(() => {});
     };
-    sendHeartbeat();
-    const int = setInterval(sendHeartbeat, 5000);
-    return () => clearInterval(int);
+    beat();
+    const int = setInterval(beat, 20000);
+    window.addEventListener('focus', beat);
+    window.addEventListener('blur', beat);
+    document.addEventListener('visibilitychange', beat);
+    return () => { clearInterval(int); window.removeEventListener('focus', beat); window.removeEventListener('blur', beat); document.removeEventListener('visibilitychange', beat); };
   }, [user]);
 
   if (!user) return <div className="min-h-screen flex items-center justify-center text-t2 text-sm">Establishing secure connection…</div>;

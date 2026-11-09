@@ -127,8 +127,14 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
 
   // Roster for @mention autocomplete. (Notifications are handled globally by NotificationManager.)
   useEffect(() => {
-    fetch(api('/api/chat/users'), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
+    const load = () => fetch(api('/api/chat/users'), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
       .then((r) => r.json()).then((d) => Array.isArray(d) && setMembers(d)).catch(() => {});
+    load();
+    // Live: presence changes patch the list; name/avatar changes reload it.
+    const offPresence = subscribe('/topic/presence', (e: { username: string; status: string }) =>
+      setMembers((prev) => prev.map((m) => (m.username === e.username ? { ...m, status: e.status } : m))));
+    const offDirectory = subscribe('/topic/directory', load);
+    return () => { offPresence(); offDirectory(); };
   }, []);
 
   // #confidential gate — enforced server-side. The passkey lives ONLY on the

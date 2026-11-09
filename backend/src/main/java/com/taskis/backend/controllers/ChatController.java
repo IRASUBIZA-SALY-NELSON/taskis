@@ -108,6 +108,12 @@ public class ChatController {
     @Autowired
     private com.taskis.backend.services.PushService pushService;
 
+    @Autowired
+    private com.taskis.backend.services.PresenceService presence;
+
+    @Autowired
+    private org.springframework.data.mongodb.core.MongoTemplate mongo;
+
     // WebSocket Message Handling
     @MessageMapping("/chat.send")
     public void sendMessage(@Payload MessageDto messageDto, Principal principal) {
@@ -257,6 +263,7 @@ public class ChatController {
             user.setAvatarUrl(avatarUrl);
             user.setPictureChanged(true);
             userRepository.save(user);
+            presence.directoryChanged();
             return ResponseEntity.ok(user);
         }
         return ResponseEntity.badRequest().body("avatarUrl required");
@@ -289,16 +296,22 @@ public class ChatController {
             user.setRingColor(c != null && c.matches("#[0-9a-fA-F]{3,8}") ? c : null);
         }
         userRepository.save(user);
+        presence.directoryChanged();
         return ResponseEntity.ok(user);
     }
 
+    /** Newest message time per channel, for unread dots. Only channels the caller may see, and computed in the database. */
     @GetMapping("/channels/latest")
-    public ResponseEntity<Map<String, Date>> getLatestTimestamps() {
+    public ResponseEntity<Map<String, Date>> getLatestTimestamps(Principal principal) {
+        User me = principal == null ? null : userRepository.findByUsername(principal.getName()).orElse(null);
+        if (me == null) return ResponseEntity.status(401).build();
+        org.springframework.data.mongodb.core.aggregation.Aggregation agg = org.springframework.data.mongodb.core.aggregation.Aggregation.newAggregation(
+                org.springframework.data.mongodb.core.aggregation.Aggregation.group("channel").max("timestamp").as("latest"));
         Map<String, Date> map = new java.util.HashMap<>();
-        for (Message m : messageRepository.findAll()) {
-            if (m.getChannel() == null || m.getTimestamp() == null) continue;
-            Date prev = map.get(m.getChannel());
-            if (prev == null || m.getTimestamp().after(prev)) map.put(m.getChannel(), m.getTimestamp());
+        for (org.bson.Document d : mongo.aggregate(agg, "messages", org.bson.Document.class).getMappedResults()) {
+            String channel = d.getString("_id");
+            Date latest = d.getDate("latest");
+            if (channel != null && latest != null && canAccessChannel(me, channel)) map.put(channel, latest);
         }
         return ResponseEntity.ok(map);
     }
@@ -346,20 +359,7 @@ public class ChatController {
     @GetMapping("/users")
     public ResponseEntity<List<User>> getUsers() {
         List<User> users = userRepository.findAll();
-        // Derive true presence from heartbeat age (clients beat every ~5s):
-        //   no/stale beat → OFFLINE, idle → AWAY, recent → as reported (ACTIVE/AWAY).
-        long now = System.currentTimeMillis();
-        for (User user : users) {
-            java.util.Date hb = user.getLastHeartbeat();
-            if (hb == null) { user.setStatus("OFFLINE"); continue; }
-            long age = now - hb.getTime();
-            if (age > 30000) {
-                user.setStatus("OFFLINE");
-            } else if (age > 12000 && "ACTIVE".equals(user.getStatus())) {
-                user.setStatus("AWAY");
-            }
-            // recent beat: keep the reported status (ACTIVE when focused, AWAY when not)
-        }
+        presence.overlay(users); // live status; changes after this are announced on /topic/presence
         return ResponseEntity.ok(users);
     }
 
@@ -372,11 +372,7 @@ public class ChatController {
         if (sender == null)
             return ResponseEntity.status(401).body("User not found");
 
-        String status = payload.get("status");
-        sender.setStatus(status != null ? status : "ACTIVE");
-        sender.setLastHeartbeat(new Date());
-        userRepository.save(sender);
-
+        presence.beat(sender.getUsername(), payload.get("status"));
         return ResponseEntity.ok().build();
     }
 

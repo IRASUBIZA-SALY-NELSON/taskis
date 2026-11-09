@@ -400,10 +400,12 @@ export default function PostsFeed({ user, onToggleSidebar }: { user: any; onTogg
   const [people, setPeople] = useState<any[]>([]);
   useEffect(() => { setStreak(recordVisit()); markFeature('recap'); }, []);
   useEffect(() => {
-    fetch(api('/api/chat/users'), { headers: { Authorization: `Bearer ${token()}` } })
+    const load = () => fetch(api('/api/chat/users'), { headers: { Authorization: `Bearer ${token()}` } })
       .then((r) => r.json())
       .then((d) => Array.isArray(d) && setPeople(d.filter((x: any) => x.username !== user.username && x.username !== 'Taskis Bot')))
       .catch(() => {});
+    load();
+    return subscribe('/topic/directory', load); // names, avatars and members change live
   }, [user.username]);
   const fileRef = useRef<HTMLInputElement>(null);
   const capRef = useRef<HTMLTextAreaElement>(null);
@@ -445,7 +447,7 @@ export default function PostsFeed({ user, onToggleSidebar }: { user: any; onTogg
     });
 
     // light auto-refresh of the newest page (merge, keeps loaded older posts)
-    const poll = setInterval(() => { fetchPage().then((d: any[]) => Array.isArray(d) && merge(d)).catch(() => {}); }, 25000);
+    const poll = setInterval(() => { fetchPage().then((d: any[]) => Array.isArray(d) && merge(d)).catch(() => {}); }, 5 * 60 * 1000);
     const clock = setInterval(() => setNow(Date.now()), 30000);
     return () => { off(); clearInterval(poll); clearInterval(clock); };
   }, []);

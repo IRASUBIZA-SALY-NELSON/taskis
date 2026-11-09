@@ -57,6 +57,9 @@ public class AuthController {
     @Autowired
     private com.taskis.backend.repositories.RefreshTokenRepository refreshTokens;
 
+    @Autowired
+    private com.taskis.backend.services.PresenceService presence;
+
     /** How long a device stays signed in without being used; every use pushes it out again. */
     @org.springframework.beans.factory.annotation.Value("${taskis.refresh-days:90}")
     private long refreshDays;
@@ -95,6 +98,7 @@ public class AuthController {
             if (user != null) {
                 user.setPassword(passwordEncoder.encode(passphrase));
                 userRepository.save(user);
+                presence.directoryChanged();
                 auditService.log(user.getUsername(), "AUTH", "REGISTER", "User registered successfully", user.getId(), user.getUsername(), null, "SUCCESS");
                 return ResponseEntity.ok(generateAuthResponse(user, request));
             }

@@ -39,8 +39,6 @@ import java.util.concurrent.Executors;
 public class PushService {
 
     private static final Set<String> BROADCAST_CHANNELS = Set.of("general", "intel", "alerts");
-    /** Someone looking at the app right now sees the message live; don't buzz them as well. */
-    private static final long ACTIVE_WINDOW_MS = 20_000L;
 
     @Value("${taskis.firebase.service-account:}")
     private String serviceAccountJson;
@@ -50,6 +48,7 @@ public class PushService {
     @Autowired private PushUnreadRepository unread;
     @Autowired private WebSubscriptionRepository webSubs;
     @Autowired private WebPushSender webPush;
+    @Autowired private PresenceService presence;
 
     private FirebaseMessaging fcm;
     private final ExecutorService pool = Executors.newFixedThreadPool(2);
@@ -156,13 +155,10 @@ public class PushService {
         String senderName = m.getSender().getDisplayName() != null && !m.getSender().getDisplayName().isBlank()
                 ? m.getSender().getDisplayName() : m.getSender().getUsername();
         boolean hasAttachment = m.getAttachmentUrl() != null && !m.getAttachmentUrl().isBlank();
-        long now = System.currentTimeMillis();
 
         for (User r : recipients(m)) {
             if (Boolean.FALSE.equals(r.getActive())) continue;
-            boolean viewingNow = "ACTIVE".equals(r.getStatus()) && r.getLastHeartbeat() != null
-                    && now - r.getLastHeartbeat().getTime() < ACTIVE_WINDOW_MS;
-            if (viewingNow) continue;
+            if (presence.isActive(r.getUsername())) continue; // looking at the app right now
 
             List<DeviceToken> tokens = fcm == null ? List.of() : deviceTokens.findByUsername(r.getUsername());
             List<com.taskis.backend.models.WebSubscription> browsers = webPush.enabled() ? webSubs.findByUsername(r.getUsername()) : List.of();

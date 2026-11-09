@@ -5,7 +5,7 @@ import { Hash, Lock, Shield, LogOut, Newspaper, Search, Radar, Megaphone, Bot, U
 import { useRouter } from 'next/navigation';
 import ThemeToggle from './ThemeToggle';
 import SettingsMenu from './SettingsMenu';
-import { disconnectWs } from '@/lib/ws';
+import { disconnectWs, subscribe, onWsConnect } from '@/lib/ws';
 import { logout } from '@/lib/session';
 import { markFeature, FEATURES, getDone, onFeatureChange } from '@/lib/features';
 import { apiUrl } from '@/lib/api';
@@ -107,33 +107,74 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
       localStorage.setItem('lastRead', JSON.stringify(lastRead));
     }
 
-    const fetchData = () => {
-      fetch(api('/api/chat/users'), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
+  }, [activeChannel]);
+
+  // The conversation being read is never "unread".
+  const activeRef = React.useRef(activeChannel);
+  React.useEffect(() => {
+    activeRef.current = activeChannel;
+    if (activeChannel) setUnread((prev) => { if (!prev[activeChannel]) return prev; const n = { ...prev }; delete n[activeChannel]; return n; });
+  }, [activeChannel]);
+
+  // People and unread dots load once, then stay current from live events (presence, directory changes, new messages)
+  // instead of asking the server every few seconds.
+  React.useEffect(() => {
+    const auth = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
+
+    const loadPeople = () => {
+      fetch(api('/api/chat/users'), { headers: auth() })
         .then((res) => { if (!res.ok) throw new Error('Not OK'); return res.json(); })
         .then((data) => {
           if (Array.isArray(data)) setOperatives(data.filter((u) => u.username !== user.username && u.username !== 'Taskis Bot'));
         })
         .catch(console.error);
+    };
 
-      fetch(api('/api/chat/channels/latest'), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
+    const loadUnread = () => {
+      fetch(api('/api/chat/channels/latest'), { headers: auth() })
         .then((res) => { if (!res.ok) throw new Error('Not OK'); return res.json(); })
         .then((data) => {
-          const lastReadStr = localStorage.getItem('lastRead');
-          const lastRead = lastReadStr ? JSON.parse(lastReadStr) : {};
-          const newUnread: Record<string, boolean> = {};
+          const lastRead = JSON.parse(localStorage.getItem('lastRead') || '{}');
+          const next: Record<string, boolean> = {};
           for (const ch in data) {
-            const latestDate = new Date(data[ch]).getTime();
-            const readDate = lastRead[ch] || 0;
-            if (latestDate > readDate && ch !== activeChannel) newUnread[ch] = true;
+            if (new Date(data[ch]).getTime() > (lastRead[ch] || 0) && ch !== activeRef.current) next[ch] = true;
           }
-          setUnread(newUnread);
+          setUnread(next);
         })
         .catch(console.error);
     };
-    fetchData();
-    const int = setInterval(fetchData, 5000);
-    return () => clearInterval(int);
-  }, [user.username, activeChannel]);
+
+    const loadAll = () => { loadPeople(); loadUnread(); };
+    loadAll();
+
+    const offs = [
+      subscribe('/topic/presence', (e: { username: string; status: string }) =>
+        setOperatives((prev) => prev.map((u) => (u.username === e.username ? { ...u, status: e.status } : u)))),
+      subscribe('/topic/directory', loadPeople),
+      onWsConnect(loadAll), // catch up after being offline or asleep
+    ];
+    const onVisible = () => { if (document.visibilityState === 'visible') loadAll(); };
+    document.addEventListener('visibilitychange', onVisible);
+    const safetyNet = setInterval(loadAll, 5 * 60 * 1000); // only if some event is ever missed
+
+    return () => { offs.forEach((off) => off()); document.removeEventListener('visibilitychange', onVisible); clearInterval(safetyNet); };
+  }, [user.username]);
+
+  // A new message in a conversation that is not open lights its dot immediately.
+  React.useEffect(() => {
+    const seen = new Set<number>();
+    const dm = (id: number) => `dm_${Math.min(user.id, id)}_${Math.max(user.id, id)}`;
+    const channelsToWatch = [...channels, 'taskis-bot', `dm_${user.id}_${user.id}`, ...operatives.map((o) => dm(o.id))];
+    const offs = channelsToWatch.map((ch) => subscribe(`/topic/${ch}`, (msg: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+      if (!msg || msg.id == null || seen.has(msg.id) || msg.deleted) return;
+      seen.add(msg.id);
+      const fresh = !msg.edited && ['', '{}'].includes((msg.reactions || '').trim()) && (msg.readBy || '').trim() === '';
+      if (!fresh || msg.sender?.username === user.username || ch === activeRef.current) return;
+      setUnread((prev) => (prev[ch] ? prev : { ...prev, [ch]: true }));
+    }));
+    return () => offs.forEach((off) => off());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [operatives, user.id, user.username]);
 
   const handleLogout = () => {
     disconnectWs();
