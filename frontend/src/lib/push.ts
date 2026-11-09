@@ -11,7 +11,7 @@ type PushPlugin = {
   createChannel(c: Record<string, unknown>): Promise<void>;
   addListener(event: string, cb: (data: any) => void): Promise<unknown>; // eslint-disable-line @typescript-eslint/no-explicit-any
 };
-type CapacitorGlobal = { isNativePlatform?: () => boolean; Plugins?: { PushNotifications?: PushPlugin } };
+type CapacitorGlobal = { isNativePlatform?: () => boolean; Plugins?: { PushNotifications?: PushPlugin; TaskisShare?: { pushConfigured?: () => Promise<{ value: boolean }> } } };
 
 const capacitor = () => (typeof window === 'undefined' ? undefined : (window as unknown as { Capacitor?: CapacitorGlobal }).Capacitor);
 const isNative = () => !!capacitor()?.isNativePlatform?.();
@@ -49,6 +49,9 @@ export async function initPush() {
       const channel = a?.notification?.data?.channel;
       if (channel) window.dispatchEvent(new CustomEvent('open-channel', { detail: channel }));
     });
+    // Registering without Firebase set up crashes the app, so only do it when this build has it.
+    const configured = await capacitor()?.Plugins?.TaskisShare?.pushConfigured?.().then((r) => r.value).catch(() => false);
+    if (!configured) return;
     const perm = await Push.requestPermissions();
     if (perm.receive === 'granted') await Push.register();
   } catch {

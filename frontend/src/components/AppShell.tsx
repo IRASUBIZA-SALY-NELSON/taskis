@@ -18,6 +18,7 @@ import '@/lib/session';
 import { initPush, markSeen } from '@/lib/push';
 import { syncWebPush } from '@/lib/webpush';
 import CallManager from '@/components/CallManager';
+import ShareTarget from '@/components/ShareTarget';
 
 export default function AppShell({ initialChannel = 'general' }: { initialChannel?: string }) {
   const router = useRouter();
@@ -103,6 +104,7 @@ export default function AppShell({ initialChannel = 'general' }: { initialChanne
     <MotionConfig reducedMotion="user">
       <NotificationManager user={user} />
       <CallManager />
+      <ShareTarget user={user} />
       <CommandPalette user={user} onNavigate={setActiveChannel} />
       <GlobalSearch onNavigate={setActiveChannel} />
       <ShortcutsHelp />
