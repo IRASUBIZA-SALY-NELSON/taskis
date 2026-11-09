@@ -15,6 +15,8 @@ import java.security.SecureRandom;
 @Component
 public class FileCrypto {
 
+    // Set TASKIS_FILE_SECRET to the secret existing uploads were encrypted with; changing it
+    // (or the JWT_SECRET it falls back to) makes already-stored files undecryptable.
     @Value("${taskis.file-secret:${jwt.secret:taskis-default-file-secret}}")
     private String secret;
 

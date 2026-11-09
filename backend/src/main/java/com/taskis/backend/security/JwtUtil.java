@@ -21,6 +21,14 @@ public class JwtUtil {
     @Value("${jwt.expiration}")
     private Long expiration;
 
+    @jakarta.annotation.PostConstruct
+    void requireStrongSecret() {
+        if (secret == null || secret.length() < 64) {
+            throw new IllegalStateException(
+                    "jwt.secret (JWT_SECRET) must be set to at least 64 characters, e.g. `openssl rand -hex 48`");
+        }
+    }
+
     private Key getSigningKey() {
         byte[] keyBytes = secret.getBytes(StandardCharsets.UTF_8);
         return Keys.hmacShaKeyFor(keyBytes);
