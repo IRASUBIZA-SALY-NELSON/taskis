@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import ThemeToggle from './ThemeToggle';
 import SettingsMenu from './SettingsMenu';
 import { disconnectWs } from '@/lib/ws';
+import { logout } from '@/lib/session';
 import { markFeature, FEATURES, getDone, onFeatureChange } from '@/lib/features';
 import { apiUrl } from '@/lib/api';
 
@@ -136,9 +137,7 @@ export default function Sidebar({ user, activeChannel, setActiveChannel, isOpen,
 
   const handleLogout = () => {
     disconnectWs();
-    localStorage.removeItem('token');
-    localStorage.removeItem('fileToken');
-    localStorage.removeItem('user');
+    logout();
     router.push('/');
   };
 

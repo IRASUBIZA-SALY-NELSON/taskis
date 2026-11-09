@@ -54,6 +54,13 @@ public class AuthController {
     @Autowired
     private com.taskis.backend.services.AuditService auditService;
 
+    @Autowired
+    private com.taskis.backend.repositories.RefreshTokenRepository refreshTokens;
+
+    /** How long a device stays signed in without being used; every use pushes it out again. */
+    @org.springframework.beans.factory.annotation.Value("${taskis.refresh-days:90}")
+    private long refreshDays;
+
     @PostMapping("/access")
     public ResponseEntity<?> access(@RequestBody Map<String, String> body) {
         String token = body.get("token");
@@ -69,7 +76,8 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody Map<String, String> body) {
+    public ResponseEntity<?> register(@RequestBody Map<String, String> body,
+            jakarta.servlet.http.HttpServletRequest request) {
         String token = body.get("token");
         String passphrase = body.get("passphrase");
 
@@ -88,7 +96,7 @@ public class AuthController {
                 user.setPassword(passwordEncoder.encode(passphrase));
                 userRepository.save(user);
                 auditService.log(user.getUsername(), "AUTH", "REGISTER", "User registered successfully", user.getId(), user.getUsername(), null, "SUCCESS");
-                return ResponseEntity.ok(generateAuthResponse(user));
+                return ResponseEntity.ok(generateAuthResponse(user, request));
             }
         }
         return ResponseEntity.badRequest().body("Registration failed");
@@ -123,21 +131,77 @@ public class AuthController {
             }
             bruteForce.onSuccess(key); // fully authenticated — clear the counter
             auditService.log(username, "AUTH", "LOGIN", "Successful login", user.getId(), username, null, "SUCCESS");
-            return ResponseEntity.ok(generateAuthResponse(user));
+            return ResponseEntity.ok(generateAuthResponse(user, request));
         }
         bruteForce.onFailure(key);
         auditService.log(username, "AUTH", "LOGIN_FAILED", "Failed login attempt for username: " + username, null, username, null, "FAILURE");
         return ResponseEntity.badRequest().body("Invalid credentials");
     }
 
-    private Map<String, Object> generateAuthResponse(User user) {
+    private Map<String, Object> generateAuthResponse(User user, jakarta.servlet.http.HttpServletRequest request) {
         String jwt = jwtUtil.generateToken(user.getUsername());
         Map<String, Object> response = new HashMap<>();
         response.put("status", "AUTHENTICATED");
         response.put("token", jwt);
         response.put("fileToken", jwtUtil.generateFileToken(user.getUsername()));
+        response.put("refreshToken", issueRefreshToken(user.getUsername(), request.getHeader("User-Agent")));
         response.put("user", user);
         return response;
+    }
+
+    private static String sha256(String value) {
+        try {
+            byte[] d = java.security.MessageDigest.getInstance("SHA-256").digest(value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return java.util.HexFormat.of().formatHex(d);
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private String issueRefreshToken(String username, String userAgent) {
+        byte[] raw = new byte[32];
+        new java.security.SecureRandom().nextBytes(raw);
+        String token = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
+        com.taskis.backend.models.RefreshToken rt = new com.taskis.backend.models.RefreshToken();
+        rt.setTokenHash(sha256(token));
+        rt.setUsername(username);
+        rt.setDevice(userAgent == null ? null : userAgent.substring(0, Math.min(userAgent.length(), 200)));
+        rt.setExpiresAt(new Date(System.currentTimeMillis() + refreshDays * 86_400_000L));
+        refreshTokens.save(rt);
+        return token;
+    }
+
+    /** Swap a valid refresh token for a fresh session token. The device stays signed in as long as it's used within the window. */
+    @PostMapping("/refresh")
+    public ResponseEntity<?> refresh(@RequestBody Map<String, String> body) {
+        String token = body.get("refreshToken");
+        if (token == null || token.isBlank()) return ResponseEntity.status(401).body("Invalid session");
+        com.taskis.backend.models.RefreshToken rt = refreshTokens.findByTokenHash(sha256(token)).orElse(null);
+        if (rt == null) return ResponseEntity.status(401).body("Invalid session");
+        long now = System.currentTimeMillis();
+        User user = rt.getExpiresAt().getTime() < now ? null : userRepository.findByUsername(rt.getUsername()).orElse(null);
+        if (user == null || Boolean.FALSE.equals(user.getActive())) {
+            refreshTokens.delete(rt);
+            return ResponseEntity.status(401).body("Invalid session");
+        }
+        rt.setLastUsedAt(new Date(now));
+        rt.setExpiresAt(new Date(now + refreshDays * 86_400_000L));
+        refreshTokens.save(rt);
+        Map<String, Object> res = new HashMap<>();
+        res.put("token", jwtUtil.generateToken(user.getUsername()));
+        res.put("fileToken", jwtUtil.generateFileToken(user.getUsername()));
+        res.put("user", user);
+        return ResponseEntity.ok(res);
+    }
+
+    /** Sign this device out for good. */
+    @PostMapping("/logout")
+    public ResponseEntity<?> logout(@RequestBody Map<String, String> body) {
+        String token = body.get("refreshToken");
+        if (token != null && !token.isBlank()) {
+            refreshTokens.findByTokenHash(sha256(token)).ifPresent(refreshTokens::delete);
+        }
+        return ResponseEntity.ok(Map.of("status", "OK"));
     }
 
     /** Issue a fresh file-scoped token for an already-authenticated session

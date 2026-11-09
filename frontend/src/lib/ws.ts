@@ -4,6 +4,7 @@ import './global-shim'; // MUST be first — defines window.global before sockjs
 import { Client, type IMessage } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 import { wsUrl } from './api';
+import { ensureFreshToken } from './session';
 
 type Handler = (body: any) => void;
 
@@ -20,7 +21,10 @@ function ensureClient(): Client {
   if (client) return client;
   client = new Client({
     webSocketFactory: () => new SockJS(wsUrl()) as any,
-    connectHeaders: { Authorization: `Bearer ${localStorage.getItem('token') || ''}` },
+    beforeConnect: async (c) => {
+      await ensureFreshToken();
+      c.connectHeaders = { Authorization: `Bearer ${localStorage.getItem('token') || ''}` };
+    },
     reconnectDelay: 3000,
     heartbeatIncoming: 10000,
     heartbeatOutgoing: 10000,

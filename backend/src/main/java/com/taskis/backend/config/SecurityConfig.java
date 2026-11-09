@@ -39,6 +39,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/files/**").permitAll()
                 .anyRequest().authenticated()
             )
+            // Not signed in (or token expired) is a 401 so the app knows to renew; a signed-in user lacking rights stays 403.
+            .exceptionHandling(ex -> ex.authenticationEntryPoint(new org.springframework.security.web.authentication.HttpStatusEntryPoint(org.springframework.http.HttpStatus.UNAUTHORIZED)))
             .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
         http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);

@@ -11,10 +11,10 @@ import NotificationManager from '@/components/NotificationManager';
 import CommandPalette from '@/components/CommandPalette';
 import ShortcutsHelp from '@/components/ShortcutsHelp';
 import GlobalSearch from '@/components/GlobalSearch';
-import FeaturesPanel from '@/components/FeaturesPanel';
 import { initThemeWatcher } from '@/lib/theme';
 import { initAccent } from '@/lib/accent';
 import { apiUrl } from '@/lib/api';
+import '@/lib/session';
 
 export default function AppShell({ initialChannel = 'general' }: { initialChannel?: string }) {
   const router = useRouter();
@@ -77,7 +77,6 @@ export default function AppShell({ initialChannel = 'general' }: { initialChanne
   return (
     <MotionConfig reducedMotion="user">
       <NotificationManager user={user} />
-      <FeaturesPanel />
       <CommandPalette user={user} onNavigate={setActiveChannel} />
       <GlobalSearch onNavigate={setActiveChannel} />
       <ShortcutsHelp />
