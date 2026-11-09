@@ -508,22 +508,24 @@ public class ChatController {
     @Autowired
     private com.taskis.backend.security.FileCrypto fileCrypto;
 
+    @Autowired
+    private com.taskis.backend.storage.FileStore fileStore;
+
     @PostMapping("/upload")
     public ResponseEntity<?> uploadFile(@RequestParam("file") MultipartFile file,
                                         @RequestParam(required = false, defaultValue = "general") String channel) {
         try {
-            Path base = Paths.get(System.getProperty("user.dir"), "uploads").toAbsolutePath().normalize();
-            Files.createDirectories(base);
-
             String original = file.getOriginalFilename() == null ? "file" : file.getOriginalFilename();
             String safeName = Paths.get(original).getFileName().toString().replaceAll("[^A-Za-z0-9._-]", "_");
             String type = file.getContentType() == null ? "application/octet-stream" : file.getContentType();
 
             String id = UUID.randomUUID().toString().replace("-", "");
-            Path filePath = base.resolve(id).normalize();
-            if (!filePath.startsWith(base)) return ResponseEntity.badRequest().body("Invalid file path");
-            Files.write(filePath, fileCrypto.encrypt(file.getBytes()));
-            Files.writeString(base.resolve(id + ".meta"), type);
+            // Encrypted as it streams (never the whole file in memory) and stored under the file's id.
+            try (java.io.InputStream plain = file.getInputStream(); java.io.InputStream encrypted = fileCrypto.encryptingStream(plain)) {
+                fileStore.put(id, encrypted, fileCrypto.encryptedLength(file.getSize()));
+            }
+            byte[] meta = type.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            fileStore.put(id + ".meta", new java.io.ByteArrayInputStream(meta), meta.length);
 
             // Confidential channel: UUID-only URL — no filename exposed anywhere
             String url;

@@ -118,20 +118,15 @@ public class AdminController {
         return ResponseEntity.ok(user);
     }
 
-    /** Erase every uploaded file (keeps the folder). */
+    @Autowired private com.taskis.backend.storage.FileStore fileStore;
+
+    /** Erase every uploaded file, wherever they are stored. */
     private int wipeUploads() {
-        int n = 0;
         try {
-            java.nio.file.Path base = java.nio.file.Paths.get(System.getProperty("user.dir"), "uploads").toAbsolutePath().normalize();
-            if (java.nio.file.Files.exists(base)) {
-                try (java.util.stream.Stream<java.nio.file.Path> s = java.nio.file.Files.list(base)) {
-                    for (java.nio.file.Path p : s.collect(java.util.stream.Collectors.toList())) {
-                        if (java.nio.file.Files.isRegularFile(p)) { java.nio.file.Files.deleteIfExists(p); n++; }
-                    }
-                }
-            }
-        } catch (Exception ignored) { /* best-effort */ }
-        return n;
+            return fileStore.deleteAll();
+        } catch (Exception e) {
+            return 0; // best-effort
+        }
     }
 
     /**
