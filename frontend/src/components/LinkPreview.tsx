@@ -1,7 +1,26 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Play, ExternalLink } from 'lucide-react';
+import { apiUrl } from '@/lib/api';
+
+type Meta = { title?: string; description?: string; image?: string; siteName?: string };
+const metaCache = new Map<string, Meta>();
+
+/** Title, description and image of a page, fetched by the server (browsers can't read other sites directly). */
+function usePageMeta(url: string, enabled: boolean): Meta | null {
+  const [meta, setMeta] = useState<Meta | null>(() => metaCache.get(url) ?? null);
+  useEffect(() => {
+    if (!enabled || metaCache.has(url)) return;
+    let alive = true;
+    fetch(apiUrl(`/api/links/preview?url=${encodeURIComponent(url)}`), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
+      .then((r) => (r.ok ? r.json() : {}))
+      .catch(() => ({}))
+      .then((m: Meta) => { metaCache.set(url, m); if (alive) setMeta(m); });
+    return () => { alive = false; };
+  }, [url, enabled]);
+  return meta;
+}
 
 const IMG = /\.(png|jpe?g|gif|webp|avif)(\?|$)/i;
 
@@ -22,9 +41,14 @@ function ytId(u: string): string | null {
 
 export default function LinkPreview({ url }: { url: string }) {
   let host = '';
-  try { host = new URL(url).hostname.replace(/^www\./, ''); } catch { return null; }
+  try { host = new URL(url).hostname.replace(/^www\./, ''); } catch { /* invalid url: nothing to show */ }
 
-  const yt = ytId(url);
+  const yt = host ? ytId(url) : null;
+  const plain = !!host && !yt && !IMG.test(url);
+  const meta = usePageMeta(url, plain);
+  const [imgOk, setImgOk] = useState(true);
+  if (!host) return null;
+
   if (yt) {
     return (
       <a href={url} target="_blank" rel="noopener noreferrer" className="block w-[300px] max-w-full rounded-xl overflow-hidden border border-border hover:border-border-strong transition-colors mt-1.5">
@@ -41,6 +65,24 @@ export default function LinkPreview({ url }: { url: string }) {
     return (
       <a href={url} target="_blank" rel="noopener noreferrer" className="block w-[300px] max-w-full rounded-xl overflow-hidden border border-border hover:border-border-strong transition-colors mt-1.5">
         <img src={url} alt="" className="w-full max-h-[280px] object-cover block" />
+      </a>
+    );
+  }
+
+  if (meta && (meta.title || meta.image)) {
+    return (
+      <a href={url} target="_blank" rel="noopener noreferrer" className="block w-[300px] max-w-full rounded-xl overflow-hidden border border-border hover:border-border-strong transition-colors mt-1.5 bg-surface-2">
+        {meta.image && imgOk && (
+          <img src={meta.image} alt="" referrerPolicy="no-referrer" onError={() => setImgOk(false)} className="w-full h-[150px] object-cover block bg-surface-3" />
+        )}
+        <div className="px-3 py-2.5">
+          <div className="flex items-center gap-1.5 text-[11.5px] text-t3 mb-0.5">
+            <img src={`https://www.google.com/s2/favicons?domain=${host}&sz=32`} alt="" className="w-3.5 h-3.5 rounded-sm flex-none" />
+            <span className="truncate">{meta.siteName || host}</span>
+          </div>
+          {meta.title && <div className="text-[13.5px] font-semibold text-t1 leading-snug line-clamp-2">{meta.title}</div>}
+          {meta.description && <div className="text-[12.5px] text-t2 leading-snug mt-0.5 line-clamp-2">{meta.description}</div>}
+        </div>
       </a>
     );
   }

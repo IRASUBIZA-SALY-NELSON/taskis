@@ -33,6 +33,7 @@ public class AdminController {
     @Autowired private com.taskis.backend.repositories.ReportRepository reportRepository;
     @Autowired private com.taskis.backend.repositories.CustomEmojiRepository customEmojiRepository;
     @Autowired private com.taskis.backend.repositories.OtpCodeRepository otpCodeRepository;
+    @Autowired private com.taskis.backend.services.PresenceService presence;
 
     @GetMapping("/audit-logs")
     public ResponseEntity<?> getAuditLogs(
@@ -91,10 +92,7 @@ public class AdminController {
     @GetMapping("/stats")
     public ResponseEntity<?> stats() {
         if (!isAdmin()) return ResponseEntity.status(403).body("Access denied");
-        long now = System.currentTimeMillis();
-        long activeNow = userRepository.findAll().stream()
-                .filter(u -> u.getLastHeartbeat() != null && now - u.getLastHeartbeat().getTime() < 30000)
-                .count();
+        long activeNow = presence.onlineCount();
         java.util.Map<String, Object> m = new java.util.HashMap<>();
         m.put("users", userRepository.count());
         m.put("activeNow", activeNow);
@@ -115,24 +113,20 @@ public class AdminController {
         if (!"ADMIN".equals(role) && !"USER".equals(role)) return ResponseEntity.badRequest().body("role must be ADMIN or USER");
         user.setRole(role);
         userRepository.save(user);
+        presence.directoryChanged();
         auditService.log(currentUser() != null ? currentUser().getUsername() : "admin", "ROLE", role.equals("ADMIN") ? "PROMOTE_ADMIN" : "DEMOTE_USER", "Changed role of " + user.getUsername() + " to " + role, id, user.getUsername(), null, "SUCCESS");
         return ResponseEntity.ok(user);
     }
 
-    /** Erase every uploaded file (keeps the folder). */
+    @Autowired private com.taskis.backend.storage.FileStore fileStore;
+
+    /** Erase every uploaded file, wherever they are stored. */
     private int wipeUploads() {
-        int n = 0;
         try {
-            java.nio.file.Path base = java.nio.file.Paths.get(System.getProperty("user.dir"), "uploads").toAbsolutePath().normalize();
-            if (java.nio.file.Files.exists(base)) {
-                try (java.util.stream.Stream<java.nio.file.Path> s = java.nio.file.Files.list(base)) {
-                    for (java.nio.file.Path p : s.collect(java.util.stream.Collectors.toList())) {
-                        if (java.nio.file.Files.isRegularFile(p)) { java.nio.file.Files.deleteIfExists(p); n++; }
-                    }
-                }
-            }
-        } catch (Exception ignored) { /* best-effort */ }
-        return n;
+            return fileStore.deleteAll();
+        } catch (Exception e) {
+            return 0; // best-effort
+        }
     }
 
     /**
@@ -226,6 +220,7 @@ public class AdminController {
             user.setPassword(passwordEncoder.encode(UUID.randomUUID().toString()));
         }
         userRepository.save(user);
+        presence.directoryChanged();
         auditService.log(currentUser() != null ? currentUser().getUsername() : "admin", "KEY", "GENERATE_KEY",
             "Generated access key for " + username, user.getId(), username, null, "SUCCESS");
         return ResponseEntity.ok(key);
@@ -275,6 +270,7 @@ public class AdminController {
         Object v = body.get("active");
         user.setActive(Boolean.TRUE.equals(v) || "true".equals(String.valueOf(v)));
         userRepository.save(user);
+        presence.directoryChanged();
         auditService.log(currentUser() != null ? currentUser().getUsername() : "admin", "USER_MGMT",
             user.getActive() ? "ACTIVATE_USER" : "DEACTIVATE_USER",
             (user.getActive() ? "Activated" : "Deactivated") + " user " + user.getUsername(), id, user.getUsername(), null, "SUCCESS");
@@ -298,6 +294,7 @@ public class AdminController {
             });
         }
         userRepository.delete(user);
+        presence.directoryChanged();
         return ResponseEntity.ok(java.util.Map.of("removed", true));
     }
 

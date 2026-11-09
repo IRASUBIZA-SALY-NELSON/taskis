@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ToastProvider } from "../components/Toast";
@@ -16,6 +16,31 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Taskis",
   description: "A private, end-to-end encrypted team messenger.",
+  applicationName: "Taskis",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    title: "Taskis",
+    statusBarStyle: "black-translucent",
+  },
+  icons: {
+    icon: [
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
+  other: {
+    "theme-color": "#0f0f11",
+    "mobile-web-app-capable": "yes",
+  },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#0f0f11",
 };
 
 export default function RootLayout({

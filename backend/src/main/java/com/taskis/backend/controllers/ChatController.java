@@ -105,6 +105,15 @@ public class ChatController {
     @Autowired
     private com.taskis.backend.services.AuditService auditService;
 
+    @Autowired
+    private com.taskis.backend.services.PushService pushService;
+
+    @Autowired
+    private com.taskis.backend.services.PresenceService presence;
+
+    @Autowired
+    private org.springframework.data.mongodb.core.MongoTemplate mongo;
+
     // WebSocket Message Handling
     @MessageMapping("/chat.send")
     public void sendMessage(@Payload MessageDto messageDto, Principal principal) {
@@ -130,6 +139,7 @@ public class ChatController {
         Message savedMessage = messageRepository.save(message);
 
         messagingTemplate.convertAndSend("/topic/" + message.getChannel(), savedMessage);
+        pushService.notifyNewMessage(savedMessage);
     }
 
     // Typing indicator relay (transient — not persisted)
@@ -253,6 +263,7 @@ public class ChatController {
             user.setAvatarUrl(avatarUrl);
             user.setPictureChanged(true);
             userRepository.save(user);
+            presence.directoryChanged();
             return ResponseEntity.ok(user);
         }
         return ResponseEntity.badRequest().body("avatarUrl required");
@@ -285,16 +296,22 @@ public class ChatController {
             user.setRingColor(c != null && c.matches("#[0-9a-fA-F]{3,8}") ? c : null);
         }
         userRepository.save(user);
+        presence.directoryChanged();
         return ResponseEntity.ok(user);
     }
 
+    /** Newest message time per channel, for unread dots. Only channels the caller may see, and computed in the database. */
     @GetMapping("/channels/latest")
-    public ResponseEntity<Map<String, Date>> getLatestTimestamps() {
+    public ResponseEntity<Map<String, Date>> getLatestTimestamps(Principal principal) {
+        User me = principal == null ? null : userRepository.findByUsername(principal.getName()).orElse(null);
+        if (me == null) return ResponseEntity.status(401).build();
+        org.springframework.data.mongodb.core.aggregation.Aggregation agg = org.springframework.data.mongodb.core.aggregation.Aggregation.newAggregation(
+                org.springframework.data.mongodb.core.aggregation.Aggregation.group("channel").max("timestamp").as("latest"));
         Map<String, Date> map = new java.util.HashMap<>();
-        for (Message m : messageRepository.findAll()) {
-            if (m.getChannel() == null || m.getTimestamp() == null) continue;
-            Date prev = map.get(m.getChannel());
-            if (prev == null || m.getTimestamp().after(prev)) map.put(m.getChannel(), m.getTimestamp());
+        for (org.bson.Document d : mongo.aggregate(agg, "messages", org.bson.Document.class).getMappedResults()) {
+            String channel = d.getString("_id");
+            Date latest = d.getDate("latest");
+            if (channel != null && latest != null && canAccessChannel(me, channel)) map.put(channel, latest);
         }
         return ResponseEntity.ok(map);
     }
@@ -328,6 +345,7 @@ public class ChatController {
 
         Message savedMessage = messageRepository.save(message);
         messagingTemplate.convertAndSend("/topic/" + message.getChannel(), savedMessage);
+        pushService.notifyNewMessage(savedMessage);
         // Audit the action + identifiers only — never the payload. Logging message content
         // (even truncated) would copy #confidential/DM text into the flat audit table, which
         // isn't gated by confidentialUnlocked / DM-participant checks.
@@ -341,20 +359,7 @@ public class ChatController {
     @GetMapping("/users")
     public ResponseEntity<List<User>> getUsers() {
         List<User> users = userRepository.findAll();
-        // Derive true presence from heartbeat age (clients beat every ~5s):
-        //   no/stale beat → OFFLINE, idle → AWAY, recent → as reported (ACTIVE/AWAY).
-        long now = System.currentTimeMillis();
-        for (User user : users) {
-            java.util.Date hb = user.getLastHeartbeat();
-            if (hb == null) { user.setStatus("OFFLINE"); continue; }
-            long age = now - hb.getTime();
-            if (age > 30000) {
-                user.setStatus("OFFLINE");
-            } else if (age > 12000 && "ACTIVE".equals(user.getStatus())) {
-                user.setStatus("AWAY");
-            }
-            // recent beat: keep the reported status (ACTIVE when focused, AWAY when not)
-        }
+        presence.overlay(users); // live status; changes after this are announced on /topic/presence
         return ResponseEntity.ok(users);
     }
 
@@ -367,11 +372,7 @@ public class ChatController {
         if (sender == null)
             return ResponseEntity.status(401).body("User not found");
 
-        String status = payload.get("status");
-        sender.setStatus(status != null ? status : "ACTIVE");
-        sender.setLastHeartbeat(new Date());
-        userRepository.save(sender);
-
+        presence.beat(sender.getUsername(), payload.get("status"));
         return ResponseEntity.ok().build();
     }
 
@@ -507,22 +508,24 @@ public class ChatController {
     @Autowired
     private com.taskis.backend.security.FileCrypto fileCrypto;
 
+    @Autowired
+    private com.taskis.backend.storage.FileStore fileStore;
+
     @PostMapping("/upload")
     public ResponseEntity<?> uploadFile(@RequestParam("file") MultipartFile file,
                                         @RequestParam(required = false, defaultValue = "general") String channel) {
         try {
-            Path base = Paths.get(System.getProperty("user.dir"), "uploads").toAbsolutePath().normalize();
-            Files.createDirectories(base);
-
             String original = file.getOriginalFilename() == null ? "file" : file.getOriginalFilename();
             String safeName = Paths.get(original).getFileName().toString().replaceAll("[^A-Za-z0-9._-]", "_");
             String type = file.getContentType() == null ? "application/octet-stream" : file.getContentType();
 
             String id = UUID.randomUUID().toString().replace("-", "");
-            Path filePath = base.resolve(id).normalize();
-            if (!filePath.startsWith(base)) return ResponseEntity.badRequest().body("Invalid file path");
-            Files.write(filePath, fileCrypto.encrypt(file.getBytes()));
-            Files.writeString(base.resolve(id + ".meta"), type);
+            // Encrypted as it streams (never the whole file in memory) and stored under the file's id.
+            try (java.io.InputStream plain = file.getInputStream(); java.io.InputStream encrypted = fileCrypto.encryptingStream(plain)) {
+                fileStore.put(id, encrypted, fileCrypto.encryptedLength(file.getSize()));
+            }
+            byte[] meta = type.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            fileStore.put(id + ".meta", new java.io.ByteArrayInputStream(meta), meta.length);
 
             // Confidential channel: UUID-only URL — no filename exposed anywhere
             String url;

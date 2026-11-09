@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -92,9 +92,7 @@ export default function AuthScreen() {
       if (!res.ok) throw new Error(await readApiError(res));
       const data = await res.json();
       if (data.status === 'AUTHENTICATED') {
-        localStorage.setItem('token', data.token);
-        if (data.fileToken) localStorage.setItem('fileToken', data.fileToken);
-        localStorage.setItem('user', JSON.stringify(data.user));
+        saveSession(data);
         router.push('/feed');
       }
     } catch (err: any) {
@@ -116,9 +114,7 @@ export default function AuthScreen() {
       if (!res.ok) throw new Error(await readApiError(res));
       const data = await res.json();
       if (data.status === 'AUTHENTICATED') {
-        localStorage.setItem('token', data.token);
-        if (data.fileToken) localStorage.setItem('fileToken', data.fileToken);
-        localStorage.setItem('user', JSON.stringify(data.user));
+        saveSession(data);
         router.push('/feed');
       }
     } catch (err: any) {

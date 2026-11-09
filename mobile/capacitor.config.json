@@ -1,0 +1,44 @@
+{
+  "appId": "rw.salynelson.taskis",
+  "appName": "Taskis",
+  "webDir": "www",
+  "server": {
+    "url": "https://tasikisi.salynelson.rw",
+    "androidScheme": "https",
+    "allowNavigation": [
+      "tasikisi.salynelson.rw",
+      "tasikisi.vercel.app",
+      "taskis-api.onrender.com"
+    ]
+  },
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#0f0f11"
+  },
+  "ios": {
+    "contentInset": "automatic",
+    "backgroundColor": "#0f0f11",
+    "preferredContentMode": "mobile"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 400,
+      "backgroundColor": "#0f0f11",
+      "showSpinner": false
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#0f0f11"
+    },
+    "Keyboard": {
+      "resize": "body"
+    },
+    "PushNotifications": {
+      "presentationOptions": [
+        "badge",
+        "sound",
+        "alert"
+      ]
+    }
+  }
+}

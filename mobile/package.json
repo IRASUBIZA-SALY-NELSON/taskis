@@ -1,0 +1,23 @@
+{
+  "name": "taskis-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Taskis native shells for Android and iOS",
+  "scripts": {
+    "icons": "python3 scripts/make-icon.py",
+    "sync": "npx cap sync",
+    "android": "npx cap open android",
+    "ios": "npx cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/cli": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/ios": "^8.5.2",
+    "@capacitor/keyboard": "^8.0.5",
+    "@capacitor/push-notifications": "^8.1.3",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.3"
+  }
+}

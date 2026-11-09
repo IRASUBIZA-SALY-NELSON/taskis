@@ -15,12 +15,16 @@ interface Registration {
 
 let client: Client | null = null;
 const registrations = new Set<Registration>();
+const connectListeners = new Set<() => void>();
 
 function ensureClient(): Client {
   if (client) return client;
   client = new Client({
     webSocketFactory: () => new SockJS(wsUrl()) as any,
-    connectHeaders: { Authorization: `Bearer ${localStorage.getItem('token') || ''}` },
+    beforeConnect: async (c) => {
+      await ensureFreshToken();
+      c.connectHeaders = { Authorization: `Bearer ${localStorage.getItem('token') || ''}` };
+    },
     reconnectDelay: 3000,
     heartbeatIncoming: 10000,
     heartbeatOutgoing: 10000,
@@ -33,6 +37,7 @@ function ensureClient(): Client {
           reg.handler(body);
         });
       });
+      connectListeners.forEach((cb) => { try { cb(); } catch { /* one listener must not break the rest */ } });
     },
   });
   client.activate();

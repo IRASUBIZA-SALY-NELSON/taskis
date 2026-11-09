@@ -11,7 +11,6 @@ import NotificationManager from '@/components/NotificationManager';
 import CommandPalette from '@/components/CommandPalette';
 import ShortcutsHelp from '@/components/ShortcutsHelp';
 import GlobalSearch from '@/components/GlobalSearch';
-import FeaturesPanel from '@/components/FeaturesPanel';
 import { initThemeWatcher } from '@/lib/theme';
 import { initAccent } from '@/lib/accent';
 import { apiUrl } from '@/lib/api';
@@ -33,6 +32,28 @@ export default function AppShell({ initialChannel = 'general' }: { initialChanne
   }, [router]);
 
   useEffect(() => { initAccent(); return initThemeWatcher(); }, []);
+
+  // Push alerts (native app only): register this phone, and tell the server which conversation is being read.
+  useEffect(() => { if (user) { initPush(); syncWebPush(); } }, [user]);
+
+  // A clicked desktop notification: ?c=<channel> when it opened a new tab, or a message from the service worker when the app was already open.
+  useEffect(() => {
+    const c = new URLSearchParams(window.location.search).get('c');
+    if (c) setActiveChannel(c);
+    const onMsg = (e: MessageEvent) => {
+      if (e.data?.type === 'open-channel' && e.data.channel) window.dispatchEvent(new CustomEvent('open-channel', { detail: e.data.channel }));
+      if (e.data?.type === 'check-call') document.dispatchEvent(new Event('visibilitychange'));
+    };
+    navigator.serviceWorker?.addEventListener('message', onMsg);
+    return () => navigator.serviceWorker?.removeEventListener('message', onMsg);
+  }, []);
+  useEffect(() => {
+    if (!user) return;
+    markSeen(activeChannel);
+    const onVisible = () => { if (document.visibilityState === 'visible') markSeen(activeChannel); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [user, activeChannel]);
 
   // Ensure a file-scoped token exists (sessions created before file tokens did won't have one).
   const [, setFileTokenReady] = useState(0);
@@ -58,18 +79,23 @@ export default function AppShell({ initialChannel = 'general' }: { initialChanne
     return () => { window.removeEventListener('open-profile', openProfile); window.removeEventListener('open-channel', openChannel); };
   }, []);
 
+  // Tell the server whether the app is in front of the person. It reports when that changes (and every 20s as a
+  // keep-alive); the server announces presence to everyone else the moment it changes.
   useEffect(() => {
     if (!user) return;
     const sendHeartbeat = () => {
       fetch(apiUrl('/api/chat/heartbeat'), {
         method: 'POST',
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: document.hasFocus() ? 'ACTIVE' : 'AWAY' }),
+        body: JSON.stringify({ status: document.hasFocus() && document.visibilityState === 'visible' ? 'ACTIVE' : 'AWAY' }),
       }).catch(() => {});
     };
-    sendHeartbeat();
-    const int = setInterval(sendHeartbeat, 5000);
-    return () => clearInterval(int);
+    beat();
+    const int = setInterval(beat, 20000);
+    window.addEventListener('focus', beat);
+    window.addEventListener('blur', beat);
+    document.addEventListener('visibilitychange', beat);
+    return () => { clearInterval(int); window.removeEventListener('focus', beat); window.removeEventListener('blur', beat); document.removeEventListener('visibilitychange', beat); };
   }, [user]);
 
   if (!user) return <div className="min-h-screen flex items-center justify-center text-t2 text-sm">Establishing secure connection…</div>;
@@ -77,7 +103,8 @@ export default function AppShell({ initialChannel = 'general' }: { initialChanne
   return (
     <MotionConfig reducedMotion="user">
       <NotificationManager user={user} />
-      <FeaturesPanel />
+      <CallManager />
+      <ShareTarget user={user} />
       <CommandPalette user={user} onNavigate={setActiveChannel} />
       <GlobalSearch onNavigate={setActiveChannel} />
       <ShortcutsHelp />

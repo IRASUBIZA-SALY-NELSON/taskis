@@ -7,6 +7,7 @@ import { Hash, Newspaper, Bot, Shield, LogOut, Search, Sun, Moon, User as UserIc
 import { motion, AnimatePresence } from 'framer-motion';
 import { initials, toneFor, displayOf } from './Sidebar';
 import { disconnectWs } from '@/lib/ws';
+import { logout } from '@/lib/session';
 import { useFocusTrap } from '@/lib/useFocusTrap';
 import { apiUrl as api } from '@/lib/api';
 const CHANNELS = ['general', 'intel', 'alerts', 'confidential'];
@@ -49,7 +50,7 @@ export default function CommandPalette({ user, onNavigate }: { user: any; onNavi
     const dark = document.documentElement.classList.toggle('light') === false;
     localStorage.setItem('theme', dark ? 'dark' : 'light');
   };
-  const logout = () => { disconnectWs(); localStorage.removeItem('token'); localStorage.removeItem('user'); router.push('/'); };
+  const signOut = () => { disconnectWs(); logout(); router.push('/'); };
   const isAdmin = user.role === 'ADMIN' || user.username?.toLowerCase() === 'nelson';
 
   const cmds: Cmd[] = useMemo(() => {
@@ -68,7 +69,7 @@ export default function CommandPalette({ user, onNavigate }: { user: any; onNavi
       { id: 'search', label: 'Search messages', hint: '⌘/', icon: <Search className="w-[15px] h-[15px]" />, run: () => { setOpen(false); window.dispatchEvent(new Event('open-search')); }, group: 'Actions' },
       { id: 'theme', label: 'Toggle theme', icon: <span className="relative w-[15px] h-[15px]"><Sun className="w-[15px] h-[15px] absolute dark:opacity-0" /><Moon className="w-[15px] h-[15px] absolute opacity-0" /></span>, run: () => { toggleTheme(); setOpen(false); }, group: 'Actions' },
       ...(isAdmin ? [{ id: 'admin', label: 'Admin panel', icon: <Shield className="w-[15px] h-[15px]" />, run: () => { router.push('/admin'); setOpen(false); }, group: 'Actions' } as Cmd] : []),
-      { id: 'logout', label: 'Log out', icon: <LogOut className="w-[15px] h-[15px]" />, run: logout, group: 'Actions' },
+      { id: 'logout', label: 'Log out', icon: <LogOut className="w-[15px] h-[15px]" />, run: signOut, group: 'Actions' },
     ];
     return list;
   }, [ops, isAdmin]);

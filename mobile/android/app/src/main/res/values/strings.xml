@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Taskis</string>
+    <string name="title_activity_main">Taskis</string>
+    <string name="package_name">rw.salynelson.taskis</string>
+    <string name="custom_url_scheme">rw.salynelson.taskis</string>
+</resources>

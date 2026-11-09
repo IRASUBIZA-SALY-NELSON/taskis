@@ -7,6 +7,7 @@ import {
   UserRound, Shield, Briefcase, CalendarDays, X, BarChart3, Hash, Settings,
   Newspaper, ChevronRight,
 } from 'lucide-react';
+import '../../lib/session';
 import ThemeToggle from '../../components/ThemeToggle';
 import { displayOf, avatarFor, ringFor } from '../../components/Sidebar';
 import { useToast } from '../../components/Toast';
