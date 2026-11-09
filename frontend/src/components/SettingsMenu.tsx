@@ -7,6 +7,7 @@ import { getNotifyPrefs, setNotifyPrefs, requestNotificationPermission, notifica
 import { getThemeMode, applyThemeMode, type ThemeMode } from '@/lib/theme';
 import { ACCENTS, getAccent, applyAccent } from '@/lib/accent';
 import { markFeature } from '@/lib/features';
+import { apiUrl } from '@/lib/api';
 
 function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
   return (
@@ -29,7 +30,26 @@ export default function SettingsMenu() {
   const [theme, setTheme] = useState<ThemeMode>('light');
   const [accent, setAccent] = useState('blue');
   const [dnd, setDndState] = useState<{ on: boolean; from: number | null; to: number | null }>({ on: false, from: null, to: null });
+  const [hidePush, setHidePush] = useState(true);
   const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    fetch(apiUrl('/api/push/prefs'), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d) setHidePush(!!d.hideContent); })
+      .catch(() => {});
+  }, [open]);
+
+  const toggleHidePush = () => {
+    const next = !hidePush;
+    setHidePush(next);
+    fetch(apiUrl('/api/push/prefs'), {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hideContent: next }),
+    }).catch(() => setHidePush(!next));
+  };
 
   useEffect(() => {
     setFontId(getFontId());
@@ -114,6 +134,10 @@ export default function SettingsMenu() {
           <div className="flex items-center justify-between px-3 py-1.5">
             <span className="text-[13.5px] text-t1">Sound</span>
             <Toggle on={prefs.sound} onClick={() => update({ sound: !prefs.sound })} />
+          </div>
+          <div className="flex items-center justify-between px-3 py-1.5 gap-2">
+            <span className="text-[13.5px] text-t1 leading-tight">Hide message text in push alerts</span>
+            <Toggle on={hidePush} onClick={toggleHidePush} />
           </div>
           <div className="flex items-center justify-between px-3 py-1.5">
             <span className="flex items-center gap-1.5 text-[13.5px] text-t1"><Moon className="w-[14px] h-[14px] text-t3" />Do Not Disturb</span>

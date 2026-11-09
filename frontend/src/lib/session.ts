@@ -74,6 +74,17 @@ export async function ensureFreshToken(): Promise<void> {
 /** Sign this device out: forget the session locally and revoke it on the server. */
 export function logout() {
   const refreshToken = localStorage.getItem('refreshToken');
+  const pushToken = localStorage.getItem('pushToken');
+  const accessToken = localStorage.getItem('token');
+  if (pushToken && accessToken && rawFetch) {
+    rawFetch(apiUrl('/api/push/unregister'), {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: pushToken }),
+      keepalive: true,
+    }).catch(() => {});
+    localStorage.removeItem('pushToken');
+  }
   clearSession();
   if (refreshToken && rawFetch) {
     rawFetch(apiUrl('/api/auth/logout'), {

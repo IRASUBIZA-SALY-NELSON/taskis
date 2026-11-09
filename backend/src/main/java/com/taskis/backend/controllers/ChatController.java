@@ -105,6 +105,9 @@ public class ChatController {
     @Autowired
     private com.taskis.backend.services.AuditService auditService;
 
+    @Autowired
+    private com.taskis.backend.services.PushService pushService;
+
     // WebSocket Message Handling
     @MessageMapping("/chat.send")
     public void sendMessage(@Payload MessageDto messageDto, Principal principal) {
@@ -130,6 +133,7 @@ public class ChatController {
         Message savedMessage = messageRepository.save(message);
 
         messagingTemplate.convertAndSend("/topic/" + message.getChannel(), savedMessage);
+        pushService.notifyNewMessage(savedMessage);
     }
 
     // Typing indicator relay (transient — not persisted)
@@ -328,6 +332,7 @@ public class ChatController {
 
         Message savedMessage = messageRepository.save(message);
         messagingTemplate.convertAndSend("/topic/" + message.getChannel(), savedMessage);
+        pushService.notifyNewMessage(savedMessage);
         // Audit the action + identifiers only — never the payload. Logging message content
         // (even truncated) would copy #confidential/DM text into the flat audit table, which
         // isn't gated by confidentialUnlocked / DM-participant checks.

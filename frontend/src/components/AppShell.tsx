@@ -15,6 +15,7 @@ import { initThemeWatcher } from '@/lib/theme';
 import { initAccent } from '@/lib/accent';
 import { apiUrl } from '@/lib/api';
 import '@/lib/session';
+import { initPush, markSeen } from '@/lib/push';
 
 export default function AppShell({ initialChannel = 'general' }: { initialChannel?: string }) {
   const router = useRouter();
@@ -33,6 +34,16 @@ export default function AppShell({ initialChannel = 'general' }: { initialChanne
   }, [router]);
 
   useEffect(() => { initAccent(); return initThemeWatcher(); }, []);
+
+  // Push alerts (native app only): register this phone, and tell the server which conversation is being read.
+  useEffect(() => { if (user) initPush(); }, [user]);
+  useEffect(() => {
+    if (!user) return;
+    markSeen(activeChannel);
+    const onVisible = () => { if (document.visibilityState === 'visible') markSeen(activeChannel); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [user, activeChannel]);
 
   // Ensure a file-scoped token exists (sessions created before file tokens did won't have one).
   const [, setFileTokenReady] = useState(0);
