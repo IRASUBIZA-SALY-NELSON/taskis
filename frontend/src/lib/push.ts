@@ -36,6 +36,10 @@ export async function initPush() {
       id: 'messages', name: 'Messages', description: 'New message alerts',
       importance: 5, visibility: 1, vibration: true, lights: true,
     });
+    await Push.createChannel({
+      id: 'calls', name: 'Calls', description: 'Incoming voice and video calls',
+      importance: 5, visibility: 1, vibration: true, lights: true,
+    });
     await Push.addListener('registration', (t: { value: string }) => {
       localStorage.setItem('pushToken', t.value);
       post('/api/push/register', { token: t.value, platform: 'android' });

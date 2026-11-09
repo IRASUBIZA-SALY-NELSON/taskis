@@ -86,6 +86,37 @@ public class PushService {
         });
     }
 
+    /** Ring the callee's phones. Nothing about the call beyond who and whether it is video. */
+    public void notifyIncomingCall(String username, String callerName, boolean video, String callId, String channel) {
+        if (!enabled()) return;
+        pool.submit(() -> {
+            for (DeviceToken t : deviceTokens.findByUsername(username)) {
+                try {
+                    fcm.send(com.google.firebase.messaging.Message.builder()
+                            .setToken(t.getToken())
+                            .setNotification(Notification.builder().setTitle(callerName)
+                                    .setBody(video ? "Incoming video call" : "Incoming voice call").build())
+                            .setAndroidConfig(AndroidConfig.builder()
+                                    .setPriority(AndroidConfig.Priority.HIGH)
+                                    .setTtl(45_000)
+                                    .setNotification(AndroidNotification.builder()
+                                            .setChannelId("calls")
+                                            .setTag("call")
+                                            .setDefaultVibrateTimings(true)
+                                            .setDefaultSound(true)
+                                            .build())
+                                    .build())
+                            .putAllData(Map.of("type", "call", "callId", callId, "channel", channel))
+                            .build());
+                } catch (FirebaseMessagingException e) {
+                    MessagingErrorCode code = e.getMessagingErrorCode();
+                    if (code == MessagingErrorCode.UNREGISTERED || code == MessagingErrorCode.INVALID_ARGUMENT
+                            || code == MessagingErrorCode.SENDER_ID_MISMATCH) deviceTokens.delete(t);
+                }
+            }
+        });
+    }
+
     private List<User> recipients(Message m) {
         User sender = m.getSender();
         String channel = m.getChannel();

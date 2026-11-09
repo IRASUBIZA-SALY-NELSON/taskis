@@ -16,6 +16,7 @@ import { initAccent } from '@/lib/accent';
 import { apiUrl } from '@/lib/api';
 import '@/lib/session';
 import { initPush, markSeen } from '@/lib/push';
+import CallManager from '@/components/CallManager';
 
 export default function AppShell({ initialChannel = 'general' }: { initialChannel?: string }) {
   const router = useRouter();
@@ -88,6 +89,7 @@ export default function AppShell({ initialChannel = 'general' }: { initialChanne
   return (
     <MotionConfig reducedMotion="user">
       <NotificationManager user={user} />
+      <CallManager />
       <CommandPalette user={user} onNavigate={setActiveChannel} />
       <GlobalSearch onNavigate={setActiveChannel} />
       <ShortcutsHelp />

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Send, Paperclip, FileText, Download, Lock, Menu, X, AlertCircle, MessageSquare, MoreVertical, MoreHorizontal, Reply, Pencil, Trash2, SmilePlus, CheckCheck, Search, Pin, Bookmark, BookmarkCheck, Mic, Square, Smile, Copy, Eye, FolderUp, KeyRound, CircleCheck, Circle, ListChecks } from 'lucide-react';
+import { Phone, Video as VideoIcon, Send, Paperclip, FileText, Download, Lock, Menu, X, AlertCircle, MessageSquare, MoreVertical, MoreHorizontal, Reply, Pencil, Trash2, SmilePlus, CheckCheck, Search, Pin, Bookmark, BookmarkCheck, Mic, Square, Smile, Copy, Eye, FolderUp, KeyRound, CircleCheck, Circle, ListChecks } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { initials, toneFor, displayOf, avatarFor, ringFor, withFileToken } from './Sidebar';
 import { subscribe, publish } from '@/lib/ws';
@@ -19,6 +19,7 @@ import { isMuted, toggleMute, playTick, playReaction } from '@/lib/notify';
 import { Bell, BellOff, ArrowDown, Bold, Italic, Code, Link as LinkIcon, Strikethrough, Flag } from 'lucide-react';
 import FilePreview, { PreviewAtt } from './FilePreview';
 import DocPreview from './DocPreview';
+import { callsEnabled, startCall } from '@/lib/calls';
 import ShareModal from './ShareModal';
 import PollComposer from './PollComposer';
 import { Share2, Dices, Coins, PartyPopper, Sparkles, Heart, AtSign, Zap } from 'lucide-react';
@@ -109,6 +110,8 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
 
   const isBot = channel === 'taskis-bot';
   const isDm = channel.startsWith('dm_');
+  const [callsOk, setCallsOk] = useState(false);
+  useEffect(() => { callsEnabled().then(setCallsOk); }, []);
   const isSelfNotes = channel === `dm_${user.id}_${user.id}`;
   const isChannel = !isBot && !isDm;
   const dmPartner = isDm && !isSelfNotes
@@ -1138,6 +1141,12 @@ export default function ChatArea({ user, channel, onToggleSidebar }: ChatAreaPro
         </div>
 
         <div className="flex items-center gap-1 sm:gap-1.5 flex-none">
+          {isDm && !isSelfNotes && callsOk && (
+            <>
+              <button onClick={() => startCall(channel, false)} className="icon-btn w-9 h-9 sm:w-8 sm:h-8" title="Voice call" aria-label="Voice call"><Phone className="w-[15px] h-[15px]" /></button>
+              <button onClick={() => startCall(channel, true)} className="icon-btn w-9 h-9 sm:w-8 sm:h-8" title="Video call" aria-label="Video call"><VideoIcon className="w-[15px] h-[15px]" /></button>
+            </>
+          )}
           <button onClick={() => { setShowSearch((s) => !s); setSearch(''); setSavedActive(false); }} className="icon-btn w-9 h-9 sm:w-8 sm:h-8" title="Search" style={showSearch ? { background: 'var(--accent-soft)', color: 'var(--accent-text)', borderColor: 'var(--accent-line)' } : undefined}>
             <Search className="w-[15px] h-[15px]" />
           </button>
